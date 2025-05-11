@@ -1,0 +1,6 @@
+.venv/
+*.txt
+*.csv
+*.png
+
+!requirements.txt
