@@ -5,5 +5,4 @@
 .DS_Store
 !requirements.txt
 
-layouts/
 *.pdf
