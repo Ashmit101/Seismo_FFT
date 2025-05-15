@@ -1,10 +1,7 @@
 import marimo
 
 __generated_with = "0.13.8"
-app = marimo.App(
-    width="medium",
-    layout_file="layouts/seismo_signal.slides.json",
-)
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -98,7 +95,7 @@ def _(
         vertical_data = vertical_data - np.mean(vertical_data)
         e_w_data = e_w_data - np.mean(e_w_data)
         n_s_data = n_s_data - np.mean(n_s_data)
-    
+
         # Create subplots with shared x-axis
         fig = make_subplots(rows=3, cols=1, 
                             shared_xaxes=True,
@@ -106,7 +103,7 @@ def _(
                             subplot_titles=("Vertical Component", 
                                            "East-West Component", 
                                            "North-South Component"))
-    
+
         # Add traces for each component
         fig.add_trace(
             go.Scatter(x=time_data, y=vertical_data, 
@@ -114,21 +111,21 @@ def _(
                       line=dict(color='blue')),
             row=1, col=1
         )
-    
+
         fig.add_trace(
             go.Scatter(x=time_data, y=e_w_data, 
                       name='East-West', 
                       line=dict(color='orange')),
             row=2, col=1
         )
-    
+
         fig.add_trace(
             go.Scatter(x=time_data, y=n_s_data, 
                       name='North-South', 
                       line=dict(color='green')),
             row=3, col=1
         )
-    
+
         # Update layout
         fig.update_layout(
             height=600,
@@ -139,13 +136,13 @@ def _(
         )
 
         xaxis_title = "Time (s)" if time_data is not None else "Index"
-    
+
         # Update axis titles
         fig.update_yaxes(title_text="Amplitude", row=1, col=1)
         fig.update_yaxes(title_text="Amplitude", row=2, col=1)
         fig.update_yaxes(title_text="Amplitude", row=3, col=1)
         fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
-    
+
         return fig
     return (plot_signal_interactive,)
 
@@ -213,7 +210,7 @@ def _(
         if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
             print("⚠️  Warning: time steps are not strictly uniform; "
                   "using mean dt={:.6f}s".format(dt))
-    
+
         # Remove mean from each signal (baseline correction)
         vertical_data = data[vertical_column_selector.value] if vertical_column_selector.value else np.zeros(1)
         e_w_data = data[e_w_column_selector.value] if e_w_column_selector.value else np.zeros(1)
@@ -233,7 +230,7 @@ def _(
                             subplot_titles=("Vertical Component", 
                                            "East-West Component", 
                                            "North-South Component"))
-    
+
         # Add traces for each component
         fig.add_trace(
             go.Scatter(x=v_hat_f, y=v_amp, 
@@ -241,21 +238,21 @@ def _(
                       line=dict(color='blue')),
             row=1, col=1
         )
-    
+
         fig.add_trace(
             go.Scatter(x=v_hat_f, y=ew_amp, 
                       name='East-West', 
                       line=dict(color='orange')),
             row=2, col=1
         )
-    
+
         fig.add_trace(
             go.Scatter(x=v_hat_f, y=ns_amp, 
                       name='North-South', 
                       line=dict(color='green')),
             row=3, col=1
         )
-    
+
         # Update layout
         fig.update_layout(
             height=600,
@@ -266,13 +263,13 @@ def _(
         )
 
         xaxis_title = "Frequency (Hz)"
-    
+
         # Update axis titles
         fig.update_yaxes(title_text="Amplitude", row=1, col=1)
         fig.update_yaxes(title_text="Amplitude", row=2, col=1)
         fig.update_yaxes(title_text="Amplitude", row=3, col=1)
         fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
-    
+
         return fig
     return (plot_signal_fft,)
 
