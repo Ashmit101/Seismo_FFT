@@ -25,8 +25,18 @@ def _(mo):
 
 
 @app.cell
-def _(data_file, io, pd):
-    df = pd.read_csv(io.BytesIO(data_file.contents()), delimiter="\t")
+def _(data_file):
+    extension = data_file.name().split(".")[1]
+    if extension == "txt":
+        delimiter = "\t"
+    elif extension == "csv":
+        delimiter = ","
+    return (delimiter,)
+
+
+@app.cell
+def _(data_file, delimiter, io, pd):
+    df = pd.read_csv(io.BytesIO(data_file.contents()), delimiter=delimiter)
     df.head()
     return (df,)
 
@@ -73,61 +83,75 @@ def _(mo, n_s_column_selector):
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     e_w_column_selector,
-    go,
-    make_subplots,
     n_s_column_selector,
-    np,
-    pd,
     time_column_selector,
     vertical_column_selector,
 ):
-    def plot_signal_interactive(data: pd.DataFrame):
+    if vertical_column_selector.value:
+        vertical_column = vertical_column_selector.value
 
-        time_data = data[time_column_selector.value] if time_column_selector.value else None
-        # Remove mean from each signal (baseline correction)
-        vertical_data = data[vertical_column_selector.value] if vertical_column_selector.value else np.zeros(1)
-        e_w_data = data[e_w_column_selector.value] if e_w_column_selector.value else np.zeros(1)
-        n_s_data = data[n_s_column_selector.value] if n_s_column_selector.value else np.zeros(1)
+    if e_w_column_selector.value:
+        ew_column = e_w_column_selector.value
 
-        vertical_data = vertical_data - np.mean(vertical_data)
-        e_w_data = e_w_data - np.mean(e_w_data)
-        n_s_data = n_s_data - np.mean(n_s_data)
+    if n_s_column_selector.value:
+        ns_column = n_s_column_selector.value
 
-        # Create subplots with shared x-axis
-        fig = make_subplots(rows=3, cols=1, 
-                            shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            subplot_titles=("Vertical Component", 
-                                           "East-West Component", 
-                                           "North-South Component"))
+    if time_column_selector.value:
+        time_column = time_column_selector.value
+    return ew_column, ns_column, time_column, vertical_column
 
-        # Add traces for each component
-        fig.add_trace(
-            go.Scatter(x=time_data, y=vertical_data, 
-                      name='Vertical', 
-                      line=dict(color='blue')),
-            row=1, col=1
+
+@app.cell
+def _(np, pd):
+    def remove_mean(data: pd.Series):
+        return data - np.mean(data)
+    return
+
+
+@app.cell
+def _(data, detrend, ew_column, ns_column, time_column, vertical_column):
+    time_data = data[time_column]
+    v_data = data[vertical_column]
+    ew_data = data[ew_column]
+    ns_data = data[ns_column]
+
+    v_data = detrend(v_data)
+    ew_data = detrend(ew_data)
+    ns_data = detrend(ns_data)
+    return ew_data, ns_data, time_data, v_data
+
+
+@app.cell(hide_code=True)
+def _(ew_data, go, make_subplots, ns_data, time_data, v_data):
+    signal_fig = make_subplots(rows=3,
+                              cols=1,
+                              shared_xaxes=True,
+                              vertical_spacing=0.05,
+                              subplot_titles=("Vertical Component",
+                                             "East-West Component",
+                                             "North-South Component"))
+    signal_fig.add_trace(
+        go.Scatter(x=time_data,y=v_data, name="Vertical", line=dict(color='blue'))
+    )
+
+    signal_fig.add_trace(
+        go.Scatter(x=time_data, y=ew_data, 
+                  name='East-West', 
+                  line=dict(color='orange')),
+        row=2, col=1
         )
 
-        fig.add_trace(
-            go.Scatter(x=time_data, y=e_w_data, 
-                      name='East-West', 
-                      line=dict(color='orange')),
-            row=2, col=1
+    signal_fig.add_trace(
+        go.Scatter(x=time_data, y=ns_data, 
+                  name='North-South', 
+                  line=dict(color='green')),
+        row=3, col=1
         )
 
-        fig.add_trace(
-            go.Scatter(x=time_data, y=n_s_data, 
-                      name='North-South', 
-                      line=dict(color='green')),
-            row=3, col=1
-        )
-
-        # Update layout
-        fig.update_layout(
+    signal_fig.update_layout(
             height=600,
             width=900,
             title_text="Seismic Signal Components",
@@ -135,26 +159,19 @@ def _(
             hovermode="x unified"
         )
 
-        xaxis_title = "Time (s)" if time_data is not None else "Index"
+    xaxis_title = "Time (s)" if time_data is not None else "Index"
 
         # Update axis titles
-        fig.update_yaxes(title_text="Amplitude", row=1, col=1)
-        fig.update_yaxes(title_text="Amplitude", row=2, col=1)
-        fig.update_yaxes(title_text="Amplitude", row=3, col=1)
-        fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
+    signal_fig.update_yaxes(title_text="Amplitude", row=1, col=1)
+    signal_fig.update_yaxes(title_text="Amplitude", row=2, col=1)
+    signal_fig.update_yaxes(title_text="Amplitude", row=3, col=1)
+    signal_fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
 
-        return fig
-    return (plot_signal_interactive,)
-
-
-@app.cell
-def _(data, plot_signal_interactive):
-    fig = plot_signal_interactive(data=data)
-    fig
+    signal_fig
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(get_window, np):
     def compute_rfft(x: np.ndarray, dt: float, window: str = "hann"):
         """
@@ -186,98 +203,125 @@ def _(np, pd):
             "NorthSouth_Imag"   : ns.imag,
             "NorthSouth_Magnitude": np.abs(ns),
         })
-    return (build_dataframe,)
-
-
-@app.cell(hide_code=True)
-def _(
-    build_dataframe,
-    compute_rfft,
-    detrend,
-    e_w_column_selector,
-    go,
-    make_subplots,
-    n_s_column_selector,
-    np,
-    pd,
-    time_column_selector,
-    vertical_column_selector,
-):
-    def plot_signal_fft(data: pd.DataFrame):
-        time_data = data[time_column_selector.value] if time_column_selector.value else None
-
-        dt = np.diff(time_data).mean()
-        if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
-            print("⚠️  Warning: time steps are not strictly uniform; "
-                  "using mean dt={:.6f}s".format(dt))
-
-        # Remove mean from each signal (baseline correction)
-        vertical_data = data[vertical_column_selector.value] if vertical_column_selector.value else np.zeros(1)
-        e_w_data = data[e_w_column_selector.value] if e_w_column_selector.value else np.zeros(1)
-        n_s_data = data[n_s_column_selector.value] if n_s_column_selector.value else np.zeros(1)
-
-        v_hat_f, v_hat, v_amp   = compute_rfft(detrend(vertical_data, type="linear"), dt)
-        _        , ew_hat, ew_amp = compute_rfft(detrend(e_w_data, type="linear"), dt)
-        _        , ns_hat, ns_amp = compute_rfft(detrend(n_s_data, type="linear"), dt)
-
-        fft_data = build_dataframe(v_hat_f, v_hat, ew_hat, ns_hat)
-        fft_data.to_csv("fft_data.csv", index=False)
-        output_csv_file = "fft_data.csv"
-
-        fig = make_subplots(rows=3, cols=1, 
-                            shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            subplot_titles=("Vertical Component", 
-                                           "East-West Component", 
-                                           "North-South Component"))
-
-        # Add traces for each component
-        fig.add_trace(
-            go.Scatter(x=v_hat_f, y=v_amp, 
-                      name='Vertical', 
-                      line=dict(color='blue')),
-            row=1, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(x=v_hat_f, y=ew_amp, 
-                      name='East-West', 
-                      line=dict(color='orange')),
-            row=2, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(x=v_hat_f, y=ns_amp, 
-                      name='North-South', 
-                      line=dict(color='green')),
-            row=3, col=1
-        )
-
-        # Update layout
-        fig.update_layout(
-            height=600,
-            width=900,
-            title_text="Fourier Transformation of Seismic Signal Components",
-            showlegend=True,
-            hovermode="x unified"
-        )
-
-        xaxis_title = "Frequency (Hz)"
-
-        # Update axis titles
-        fig.update_yaxes(title_text="Amplitude", row=1, col=1)
-        fig.update_yaxes(title_text="Amplitude", row=2, col=1)
-        fig.update_yaxes(title_text="Amplitude", row=3, col=1)
-        fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
-
-        return fig
-    return (plot_signal_fft,)
+    return
 
 
 @app.cell
-def _(data, plot_signal_fft):
-    fft_fig = plot_signal_fft(data=data)
-    fft_fig
+def _(compute_rfft, ew_data, np, ns_data, time_data, v_data):
+    dt = np.diff(time_data).mean()
+    if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
+        print("⚠️  Warning: time steps are not strictly uniform; "
+              "using mean dt={:.6f}s".format(dt))
+
+    v_hat_f, v_hat, v_amp   = compute_rfft(v_data, dt)
+    _        , ew_hat, ew_amp = compute_rfft(ew_data, dt)
+    _        , ns_hat, ns_amp = compute_rfft(ns_data, dt)
+
+
+    return ew_amp, ns_amp, v_amp, v_hat_f
+
+
+@app.cell
+def _(
+    ew_amp,
+    ew_column,
+    ns_amp,
+    ns_column,
+    pd,
+    v_amp,
+    v_hat_f,
+    vertical_column,
+):
+    fourier_df = pd.DataFrame(
+        {
+            "frequency": v_hat_f,
+            vertical_column: v_amp,
+            ew_column: ew_amp,
+            ns_column: ns_amp
+        }
+    )
+
+    fourier_df.tail()
+    return (fourier_df,)
+
+
+@app.cell(hide_code=True)
+def _(ew_amp, go, make_subplots, ns_amp, v_amp, v_hat_f):
+    fourier_fig = make_subplots(rows=3, cols=1, 
+                        shared_xaxes=True,
+                        vertical_spacing=0.05,
+                        subplot_titles=("Vertical Component", 
+                                       "East-West Component", 
+                                       "North-South Component"))
+
+    # Add traces for each component
+    fourier_fig.add_trace(
+        go.Scatter(x=v_hat_f, y=v_amp, 
+                  name='Vertical', 
+                  line=dict(color='blue')),
+        row=1, col=1
+    )
+
+    fourier_fig.add_trace(
+        go.Scatter(x=v_hat_f, y=ew_amp, 
+                  name='East-West', 
+                  line=dict(color='orange')),
+        row=2, col=1
+    )
+
+    fourier_fig.add_trace(
+        go.Scatter(x=v_hat_f, y=ns_amp, 
+                  name='North-South', 
+                  line=dict(color='green')),
+        row=3, col=1
+    )
+
+    # Update layout
+    fourier_fig.update_layout(
+        height=600,
+        width=900,
+        title_text="Fourier Transformation of Seismic Signal Components",
+        showlegend=True,
+        hovermode="x unified"
+    )
+
+    fourier_fig_xaxis_title = "Frequency (Hz)"
+
+    # Update axis titles
+    fourier_fig.update_yaxes(title_text="Amplitude", row=1, col=1)
+    fourier_fig.update_yaxes(title_text="Amplitude", row=2, col=1)
+    fourier_fig.update_yaxes(title_text="Amplitude", row=3, col=1)
+    fourier_fig.update_xaxes(title_text=fourier_fig_xaxis_title, row=3, col=1)
+
+    fourier_fig
+    return
+
+
+@app.cell
+def _(data, ew_column, fourier_df, np, ns_column, vertical_column):
+    hvsr = np.sqrt(np.square(data[ew_column]) + np.square(data[ns_column])) / data[vertical_column]
+    fourier_df["hvsr"] = hvsr
+    fourier_df.tail()
+    return
+
+
+@app.cell
+def _(fourier_df, go):
+    # Plot HVSR plot
+    figure = go.Figure()
+
+    figure.add_trace(
+        go.Scatter(x=fourier_df["frequency"], y=fourier_df["hvsr"], name="HVSR", mode="lines")
+    )
+
+    figure.update_layout(
+        title="HVSR Plot",  # FIX 4: Add a main plot title
+        xaxis_title="Frequency (Hz)", # FIX 5: More descriptive x-axis title
+        yaxis_title="HVSR Amplitude", # FIX 6: Add a y-axis title
+        hovermode="x unified" # FIX 7: Improve hover experience
+    )
+
+    figure
     return
 
 
