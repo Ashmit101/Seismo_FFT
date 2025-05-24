@@ -14,7 +14,8 @@ def _():
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     from scipy.signal import detrend, get_window
-    return detrend, get_window, go, io, make_subplots, mo, np, pd
+    from scipy.fft import fft, fftfreq
+    return detrend, fft, fftfreq, get_window, go, io, make_subplots, mo, np, pd
 
 
 @app.cell
@@ -26,11 +27,12 @@ def _(mo):
 
 @app.cell
 def _(data_file):
-    extension = data_file.name().split(".")[1]
-    if extension == "txt":
-        delimiter = "\t"
-    elif extension == "csv":
-        delimiter = ","
+    if data_file.name():
+        extension = data_file.name().split(".")[1]
+        if extension == "txt":
+            delimiter = "\t"
+        elif extension == "csv":
+            delimiter = ","
     return (delimiter,)
 
 
@@ -102,13 +104,6 @@ def _(
     if time_column_selector.value:
         time_column = time_column_selector.value
     return ew_column, ns_column, time_column, vertical_column
-
-
-@app.cell
-def _(np, pd):
-    def remove_mean(data: pd.Series):
-        return data - np.mean(data)
-    return
 
 
 @app.cell
@@ -184,7 +179,7 @@ def _(get_window, np):
         amp = 2.0 * np.abs(spec)                  # one‑sided amplitude
         freqs = np.fft.rfftfreq(n, d=dt)
         return freqs, spec, amp
-    return (compute_rfft,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -207,34 +202,47 @@ def _(np, pd):
 
 
 @app.cell
-def _(compute_rfft, ew_data, np, ns_data, time_data, v_data):
+def _(ew_data, fft, fftfreq, np, ns_data, time_data, v_data):
     dt = np.diff(time_data).mean()
     if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
         print("⚠️  Warning: time steps are not strictly uniform; "
               "using mean dt={:.6f}s".format(dt))
+    N = len(time_data)
+    frequency_data = fftfreq(N, dt)[:N//2]
+    v_f = fft(v_data)
+    ew_f = fft(ew_data)
+    ns_f = fft(ns_data)
 
-    v_hat_f, v_hat, v_amp   = compute_rfft(v_data, dt)
-    _        , ew_hat, ew_amp = compute_rfft(ew_data, dt)
-    _        , ns_hat, ns_amp = compute_rfft(ns_data, dt)
+    v_amp = 2.0/N * np.abs(v_f[:N//2])
+    ew_amp = 2.0/N * np.abs(ew_f[:N//2])
+    ns_amp = 2.0/N * np.abs(ns_f[:N//2])
+    return ew_amp, frequency_data, ns_amp, v_amp
 
 
-    return ew_amp, ns_amp, v_amp, v_hat_f
+@app.cell
+def _(ew_amp, frequency_data, ns_amp, time_data, v_amp):
+    print(f"Time data: {len(time_data)}")
+    print(f"Frequency data: {len(frequency_data)}")
+    print(f"Vertical data: {len(v_amp)}")
+    print(f"East-West data: {len(ew_amp)}")
+    print(f"North-South data: {len(ns_amp)}")
+    return
 
 
 @app.cell
 def _(
     ew_amp,
     ew_column,
+    frequency_data,
     ns_amp,
     ns_column,
     pd,
     v_amp,
-    v_hat_f,
     vertical_column,
 ):
     fourier_df = pd.DataFrame(
         {
-            "frequency": v_hat_f,
+            "frequency": frequency_data,
             vertical_column: v_amp,
             ew_column: ew_amp,
             ns_column: ns_amp
@@ -246,7 +254,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(ew_amp, go, make_subplots, ns_amp, v_amp, v_hat_f):
+def _(ew_amp, frequency_data, go, make_subplots, ns_amp, v_amp):
     fourier_fig = make_subplots(rows=3, cols=1, 
                         shared_xaxes=True,
                         vertical_spacing=0.05,
@@ -256,21 +264,21 @@ def _(ew_amp, go, make_subplots, ns_amp, v_amp, v_hat_f):
 
     # Add traces for each component
     fourier_fig.add_trace(
-        go.Scatter(x=v_hat_f, y=v_amp, 
+        go.Scatter(x=frequency_data, y=v_amp, 
                   name='Vertical', 
                   line=dict(color='blue')),
         row=1, col=1
     )
 
     fourier_fig.add_trace(
-        go.Scatter(x=v_hat_f, y=ew_amp, 
+        go.Scatter(x=frequency_data, y=ew_amp, 
                   name='East-West', 
                   line=dict(color='orange')),
         row=2, col=1
     )
 
     fourier_fig.add_trace(
-        go.Scatter(x=v_hat_f, y=ns_amp, 
+        go.Scatter(x=frequency_data, y=ns_amp, 
                   name='North-South', 
                   line=dict(color='green')),
         row=3, col=1
@@ -298,20 +306,21 @@ def _(ew_amp, go, make_subplots, ns_amp, v_amp, v_hat_f):
 
 
 @app.cell
-def _(data, ew_column, fourier_df, np, ns_column, vertical_column):
-    hvsr = np.sqrt(np.square(data[ew_column]) + np.square(data[ns_column])) / data[vertical_column]
+def _(ew_amp, fourier_df, np, ns_amp, v_amp):
+    epsilon = 1e-10
+    hvsr = np.sqrt(ew_amp**2 + ns_amp**2) / (2 * (v_amp + epsilon))
     fourier_df["hvsr"] = hvsr
     fourier_df.tail()
-    return
+    return (hvsr,)
 
 
 @app.cell
-def _(fourier_df, go):
+def _(frequency_data, go, hvsr):
     # Plot HVSR plot
     figure = go.Figure()
 
     figure.add_trace(
-        go.Scatter(x=fourier_df["frequency"], y=fourier_df["hvsr"], name="HVSR", mode="lines")
+        go.Scatter(x=frequency_data, y=hvsr, name="HVSR", mode="lines")
     )
 
     figure.update_layout(
@@ -322,6 +331,21 @@ def _(fourier_df, go):
     )
 
     figure
+    return
+
+
+@app.cell
+def _(fourier_df, io, mo):
+    fourier_csv_bytes = io.BytesIO()
+    fourier_df.to_csv(fourier_csv_bytes, index=False)
+    fourier_csv_bytes.seek(0)
+
+    download_button = mo.download(
+        label="Download CSV File",
+        filename="seismic_data.csv",
+        data=fourier_csv_bytes.getvalue(),
+    )
+    download_button
     return
 
 
