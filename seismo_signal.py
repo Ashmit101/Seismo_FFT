@@ -134,8 +134,26 @@ def _(data, detrend, ew_column, ns_column, time_column, vertical_column):
     return ew_data, ns_data, time_data, v_data
 
 
+@app.cell
+def _(mo):
+    first_graph_type = mo.ui.switch(
+        value=False,
+        label="Logarithmic scale"
+    )
+    first_graph_type
+    return (first_graph_type,)
+
+
 @app.cell(hide_code=True)
-def _(ew_data, go, make_subplots, ns_data, time_data, v_data):
+def _(
+    ew_data,
+    first_graph_type,
+    go,
+    make_subplots,
+    ns_data,
+    time_data,
+    v_data,
+):
     signal_fig = make_subplots(rows=3,
                               cols=1,
                               shared_xaxes=True,
@@ -176,6 +194,13 @@ def _(ew_data, go, make_subplots, ns_data, time_data, v_data):
     signal_fig.update_yaxes(title_text="Amplitude", row=2, col=1)
     signal_fig.update_yaxes(title_text="Amplitude", row=3, col=1)
     signal_fig.update_xaxes(title_text=xaxis_title, row=3, col=1)
+
+    # Scale type
+    if first_graph_type.value:
+        # Make y axis log
+        signal_fig.update_yaxes(type='log')
+    else:
+        signal_fig.update_yaxes(type='linear')
 
     signal_fig
     return
@@ -268,8 +293,26 @@ def _(
     return (fourier_df,)
 
 
+@app.cell
+def _(mo):
+    second_graph_type = mo.ui.switch(
+        value=False,
+        label="Logarithmic scale"
+    )
+    second_graph_type
+    return (second_graph_type,)
+
+
 @app.cell(hide_code=True)
-def _(ew_amp, frequency_data, go, make_subplots, ns_amp, v_amp):
+def _(
+    ew_amp,
+    frequency_data,
+    go,
+    make_subplots,
+    ns_amp,
+    second_graph_type,
+    v_amp,
+):
     fourier_fig = make_subplots(rows=3, cols=1, 
                         shared_xaxes=True,
                         vertical_spacing=0.05,
@@ -316,6 +359,11 @@ def _(ew_amp, frequency_data, go, make_subplots, ns_amp, v_amp):
     fourier_fig.update_yaxes(title_text="Amplitude", row=3, col=1)
     fourier_fig.update_xaxes(title_text=fourier_fig_xaxis_title, row=3, col=1)
 
+    if second_graph_type.value:
+        fourier_fig.update_yaxes(type='log')
+    else:
+        fourier_fig.update_yaxes(type='linear')
+
     fourier_fig
     return
 
@@ -330,7 +378,16 @@ def _(ew_amp, fourier_df, np, ns_amp, v_amp):
 
 
 @app.cell
-def _(frequency_data, go, hvsr):
+def _(mo):
+    hvsr_type = mo.ui.switch(
+        value=False,label="Logarithmic"
+    )
+    hvsr_type
+    return (hvsr_type,)
+
+
+@app.cell
+def _(frequency_data, go, hvsr, hvsr_type):
     # Plot HVSR plot
     figure = go.Figure()
 
@@ -344,6 +401,11 @@ def _(frequency_data, go, hvsr):
         yaxis_title="HVSR Amplitude", # FIX 6: Add a y-axis title
         hovermode="x unified" # FIX 7: Improve hover experience
     )
+
+    if hvsr_type.value:
+        figure.update_yaxes(type='log')
+    else:
+        figure.update_yaxes(type='linear')
 
     figure
     return
