@@ -26,19 +26,34 @@ def _(mo):
 
 
 @app.cell
-def _(data_file):
+def _(data_file, io, mo, pd):
+    delimiter = ''
+    extension = ''
+    selected_sheet = None
     if data_file.name():
         extension = data_file.name().split(".")[1]
         if extension == "txt":
             delimiter = "\t"
         elif extension == "csv":
             delimiter = ","
-    return (delimiter,)
+        elif extension == 'xlsx':
+            excel_file = pd.ExcelFile(io.BytesIO(data_file.contents()))
+            sheet_names = excel_file.sheet_names
+            selected_sheet = mo.ui.radio(options=sheet_names, label='Choose sheet', value=sheet_names[0])
+            selected_sheet
+
+    selected_sheet
+    return delimiter, excel_file, selected_sheet
 
 
 @app.cell
-def _(data_file, delimiter, io, pd):
-    df = pd.read_csv(io.BytesIO(data_file.contents()), delimiter=delimiter)
+def _(data_file, delimiter, excel_file, io, pd, selected_sheet):
+    if selected_sheet.value:
+        df = excel_file.parse(sheet_name=selected_sheet.value)
+    
+    if delimiter:
+        df = pd.read_csv(io.BytesIO(data_file.contents()), delimiter=delimiter)
+
     df.head()
     return (df,)
 

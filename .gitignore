@@ -6,3 +6,5 @@
 !requirements.txt
 
 *.pdf
+sample/
+.idea/
