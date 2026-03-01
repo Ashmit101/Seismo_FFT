@@ -48,12 +48,16 @@ def _(data_file, io, mo, pd):
 
 @app.cell
 def _(data_file, delimiter, excel_file, io, pd, selected_sheet):
-    if selected_sheet.value:
-        df = excel_file.parse(sheet_name=selected_sheet.value)
-    
+    if selected_sheet:
+        if selected_sheet.value:
+            df = excel_file.parse(sheet_name=selected_sheet.value)
+
     if delimiter:
         df = pd.read_csv(io.BytesIO(data_file.contents()), delimiter=delimiter)
 
+    if df.empty:
+        print("Data not extracted!")
+    
     df.head()
     return (df,)
 
