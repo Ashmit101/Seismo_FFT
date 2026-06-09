@@ -1,7 +1,7 @@
-
 """
 fft_seismic.py  –  compute and save FFT results for V / E‑W / N‑S channels
 """
+
 import argparse
 from pathlib import Path
 
@@ -21,36 +21,42 @@ def compute_rfft(x: np.ndarray, dt: float, window: str = "hann"):
     """
     n = len(x)
     win = get_window(window, n, fftbins=True)
-    spec = np.fft.rfft(x * win) / n           # complex
-    amp = 2.0 * np.abs(spec)                  # one‑sided amplitude
+    spec = np.fft.rfft(x * win) / n  # complex
+    amp = 2.0 * np.abs(spec)  # one‑sided amplitude
     freqs = np.fft.rfftfreq(n, d=dt)
     return freqs, spec, amp
 
 
 def build_dataframe(freqs, v, ew, ns) -> pd.DataFrame:
     """Pack real/imag/mag for three channels into a tidy DataFrame."""
-    return pd.DataFrame({
-        "Frequency_Hz"      : freqs,
-        "Vertical_Real"     : v.real,
-        "Vertical_Imag"     : v.imag,
-        "Vertical_Magnitude": np.abs(v),
-        "EastWest_Real"     : ew.real,
-        "EastWest_Imag"     : ew.imag,
-        "EastWest_Magnitude": np.abs(ew),
-        "NorthSouth_Real"   : ns.real,
-        "NorthSouth_Imag"   : ns.imag,
-        "NorthSouth_Magnitude": np.abs(ns),
-    })
+    return pd.DataFrame(
+        {
+            "Frequency_Hz": freqs,
+            "Vertical_Real": v.real,
+            "Vertical_Imag": v.imag,
+            "Vertical_Magnitude": np.abs(v),
+            "EastWest_Real": ew.real,
+            "EastWest_Imag": ew.imag,
+            "EastWest_Magnitude": np.abs(ew),
+            "NorthSouth_Real": ns.real,
+            "NorthSouth_Imag": ns.imag,
+            "NorthSouth_Magnitude": np.abs(ns),
+        }
+    )
 
 
 def save_plot(freqs, v_amp, ew_amp, ns_amp, out_png: Path):
     """Quick three‑panel amplitude plot."""
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8),
-                             sharex=True, constrained_layout=True)
+    fig, axes = plt.subplots(
+        3, 1, figsize=(10, 8), sharex=True, constrained_layout=True
+    )
 
-    axes[0].plot(freqs, v_amp);  axes[0].set_title("Vertical")
-    axes[1].plot(freqs, ew_amp); axes[1].set_title("East – West")
-    axes[2].plot(freqs, ns_amp); axes[2].set_title("North – South")
+    axes[0].plot(freqs, v_amp)
+    axes[0].set_title("Vertical")
+    axes[1].plot(freqs, ew_amp)
+    axes[1].set_title("East – West")
+    axes[2].plot(freqs, ns_amp)
+    axes[2].set_title("North – South")
 
     for ax in axes:
         ax.set_ylabel("Amplitude")
@@ -66,8 +72,12 @@ def save_plot(freqs, v_amp, ew_amp, ns_amp, out_png: Path):
 # ----------------------------------------------------------------------
 def main(argv=None):
     p = argparse.ArgumentParser(description="Compute FFT of 3‑component signal")
-    p.add_argument("csv", type=Path, help="Input CSV with columns Time (s), V, E-W, N-S")
-    p.add_argument("-o", "--out-dir", type=Path, default=Path("."), help="Output folder")
+    p.add_argument(
+        "csv", type=Path, help="Input CSV with columns Time (s), V, E-W, N-S"
+    )
+    p.add_argument(
+        "-o", "--out-dir", type=Path, default=Path("."), help="Output folder"
+    )
     args = p.parse_args(argv)
 
     # ------------------------------------------------------------------
@@ -75,8 +85,8 @@ def main(argv=None):
     # ------------------------------------------------------------------
     data = pd.read_csv(args.csv, delimiter="\t")
     try:
-        t  = data["Time (s)"].to_numpy()
-        v  = data["V"].to_numpy()
+        t = data["Time (s)"].to_numpy()
+        v = data["V"].to_numpy()
         ew = data["E-W"].to_numpy()
         ns = data["N-S"].to_numpy()
     except KeyError as e:
@@ -84,15 +94,17 @@ def main(argv=None):
 
     dt = np.diff(t).mean()
     if not np.allclose(np.diff(t), dt, rtol=1e-4):
-        print("⚠️  Warning: time steps are not strictly uniform; "
-              "using mean dt={:.6f}s".format(dt))
+        print(
+            "⚠️  Warning: time steps are not strictly uniform; "
+            "using mean dt={:.6f}s".format(dt)
+        )
 
     # ------------------------------------------------------------------
     # preprocess → detrend → FFT
     # ------------------------------------------------------------------
-    v_hat_f, v_hat, v_amp   = compute_rfft(detrend(v, type="linear"), dt)
-    _        , ew_hat, ew_amp = compute_rfft(detrend(ew, type="linear"), dt)
-    _        , ns_hat, ns_amp = compute_rfft(detrend(ns, type="linear"), dt)
+    v_hat_f, v_hat, v_amp = compute_rfft(detrend(v, type="linear"), dt)
+    _, ew_hat, ew_amp = compute_rfft(detrend(ew, type="linear"), dt)
+    _, ns_hat, ns_amp = compute_rfft(detrend(ns, type="linear"), dt)
 
     # ------------------------------------------------------------------
     # outputs

@@ -8,3 +8,5 @@
 *.pdf
 sample/
 .idea/
+.aider*
+*~

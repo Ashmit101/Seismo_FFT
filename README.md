@@ -55,10 +55,10 @@ uv run python main.py
 
 **Data format:** `main.py` looks for **`new_data.txt`** in the project root, tab-delimited, with columns:
 
-- `Time (s)` — time in seconds  
-- `V` — vertical component  
-- `E-W` — east–west component  
-- `N-S` — north–south component  
+- `Time (s)` — time in seconds
+- `V` — vertical component
+- `E-W` — east–west component
+- `N-S` — north–south component
 
 Results are shown as matplotlib figures and optionally written to `directional_components.csv`.
 

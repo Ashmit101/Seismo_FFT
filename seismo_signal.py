@@ -15,6 +15,7 @@ def _():
     from plotly.subplots import make_subplots
     from scipy.signal import detrend, get_window
     from scipy.fft import fft, fftfreq
+
     return detrend, fft, fftfreq, get_window, go, io, make_subplots, mo, np, pd
 
 
@@ -27,8 +28,8 @@ def _(mo):
 
 @app.cell
 def _(data_file, io, mo, pd):
-    delimiter = ''
-    extension = ''
+    delimiter = ""
+    extension = ""
     selected_sheet = None
     if data_file.name():
         extension = data_file.name().split(".")[1]
@@ -36,10 +37,12 @@ def _(data_file, io, mo, pd):
             delimiter = "\t"
         elif extension == "csv":
             delimiter = ","
-        elif extension == 'xlsx':
+        elif extension == "xlsx":
             excel_file = pd.ExcelFile(io.BytesIO(data_file.contents()))
             sheet_names = excel_file.sheet_names
-            selected_sheet = mo.ui.radio(options=sheet_names, label='Choose sheet', value=sheet_names[0])
+            selected_sheet = mo.ui.radio(
+                options=sheet_names, label="Choose sheet", value=sheet_names[0]
+            )
             selected_sheet
 
     selected_sheet
@@ -57,7 +60,7 @@ def _(data_file, delimiter, excel_file, io, pd, selected_sheet):
 
     if df.empty:
         print("Data not extracted!")
-    
+
     df.head()
     return (df,)
 
@@ -140,10 +143,7 @@ def _(data, detrend, ew_column, ns_column, time_column, vertical_column):
 
 @app.cell
 def _(mo):
-    first_graph_type = mo.ui.switch(
-        value=False,
-        label="Logarithmic scale"
-    )
+    first_graph_type = mo.ui.switch(value=False, label="Logarithmic scale")
     first_graph_type
     return (first_graph_type,)
 
@@ -158,42 +158,46 @@ def _(
     time_data,
     v_data,
 ):
-    signal_fig = make_subplots(rows=3,
-                              cols=1,
-                              shared_xaxes=True,
-                              vertical_spacing=0.05,
-                              subplot_titles=("Vertical Component",
-                                             "East-West Component",
-                                             "North-South Component"))
+    signal_fig = make_subplots(
+        rows=3,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        subplot_titles=(
+            "Vertical Component",
+            "East-West Component",
+            "North-South Component",
+        ),
+    )
     signal_fig.add_trace(
-        go.Scatter(x=time_data,y=v_data, name="Vertical", line=dict(color='blue'))
+        go.Scatter(x=time_data, y=v_data, name="Vertical", line=dict(color="blue"))
     )
 
     signal_fig.add_trace(
-        go.Scatter(x=time_data, y=ew_data, 
-                  name='East-West', 
-                  line=dict(color='orange')),
-        row=2, col=1
-        )
+        go.Scatter(x=time_data, y=ew_data, name="East-West", line=dict(color="orange")),
+        row=2,
+        col=1,
+    )
 
     signal_fig.add_trace(
-        go.Scatter(x=time_data, y=ns_data, 
-                  name='North-South', 
-                  line=dict(color='green')),
-        row=3, col=1
-        )
+        go.Scatter(
+            x=time_data, y=ns_data, name="North-South", line=dict(color="green")
+        ),
+        row=3,
+        col=1,
+    )
 
     signal_fig.update_layout(
-            height=600,
-            width=900,
-            title_text="Seismic Signal Components",
-            showlegend=True,
-            hovermode="x unified"
-        )
+        height=600,
+        width=900,
+        title_text="Seismic Signal Components",
+        showlegend=True,
+        hovermode="x unified",
+    )
 
     xaxis_title = "Time (s)" if time_data is not None else "Index"
 
-        # Update axis titles
+    # Update axis titles
     signal_fig.update_yaxes(title_text="Amplitude", row=1, col=1)
     signal_fig.update_yaxes(title_text="Amplitude", row=2, col=1)
     signal_fig.update_yaxes(title_text="Amplitude", row=3, col=1)
@@ -202,9 +206,9 @@ def _(
     # Scale type
     if first_graph_type.value:
         # Make y axis log
-        signal_fig.update_yaxes(type='log')
+        signal_fig.update_yaxes(type="log")
     else:
-        signal_fig.update_yaxes(type='linear')
+        signal_fig.update_yaxes(type="linear")
 
     signal_fig
     return
@@ -219,10 +223,11 @@ def _(get_window, np):
         """
         n = len(x)
         win = get_window(window, n, fftbins=True)
-        spec = np.fft.rfft(x * win) / n           # complex
-        amp = 2.0 * np.abs(spec)                  # one‑sided amplitude
+        spec = np.fft.rfft(x * win) / n  # complex
+        amp = 2.0 * np.abs(spec)  # one‑sided amplitude
         freqs = np.fft.rfftfreq(n, d=dt)
         return freqs, spec, amp
+
     return
 
 
@@ -230,18 +235,21 @@ def _(get_window, np):
 def _(np, pd):
     def build_dataframe(freqs, v, ew, ns) -> pd.DataFrame:
         """Pack real/imag/mag for three channels into a tidy DataFrame."""
-        return pd.DataFrame({
-            "Frequency_Hz"      : freqs,
-            "Vertical_Real"     : v.real,
-            "Vertical_Imag"     : v.imag,
-            "Vertical_Magnitude": np.abs(v),
-            "EastWest_Real"     : ew.real,
-            "EastWest_Imag"     : ew.imag,
-            "EastWest_Magnitude": np.abs(ew),
-            "NorthSouth_Real"   : ns.real,
-            "NorthSouth_Imag"   : ns.imag,
-            "NorthSouth_Magnitude": np.abs(ns),
-        })
+        return pd.DataFrame(
+            {
+                "Frequency_Hz": freqs,
+                "Vertical_Real": v.real,
+                "Vertical_Imag": v.imag,
+                "Vertical_Magnitude": np.abs(v),
+                "EastWest_Real": ew.real,
+                "EastWest_Imag": ew.imag,
+                "EastWest_Magnitude": np.abs(ew),
+                "NorthSouth_Real": ns.real,
+                "NorthSouth_Imag": ns.imag,
+                "NorthSouth_Magnitude": np.abs(ns),
+            }
+        )
+
     return
 
 
@@ -249,17 +257,19 @@ def _(np, pd):
 def _(ew_data, fft, fftfreq, np, ns_data, time_data, v_data):
     dt = np.diff(time_data).mean()
     if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
-        print("⚠️  Warning: time steps are not strictly uniform; "
-              "using mean dt={:.6f}s".format(dt))
+        print(
+            "⚠️  Warning: time steps are not strictly uniform; "
+            "using mean dt={:.6f}s".format(dt)
+        )
     N = len(time_data)
-    frequency_data = fftfreq(N, dt)[:N//2]
+    frequency_data = fftfreq(N, dt)[: N // 2]
     v_f = fft(v_data)
     ew_f = fft(ew_data)
     ns_f = fft(ns_data)
 
-    v_amp = 2.0/N * np.abs(v_f[:N//2])
-    ew_amp = 2.0/N * np.abs(ew_f[:N//2])
-    ns_amp = 2.0/N * np.abs(ns_f[:N//2])
+    v_amp = 2.0 / N * np.abs(v_f[: N // 2])
+    ew_amp = 2.0 / N * np.abs(ew_f[: N // 2])
+    ns_amp = 2.0 / N * np.abs(ns_f[: N // 2])
     return ew_amp, frequency_data, ns_amp, v_amp
 
 
@@ -289,7 +299,7 @@ def _(
             "frequency": frequency_data,
             vertical_column: v_amp,
             ew_column: ew_amp,
-            ns_column: ns_amp
+            ns_column: ns_amp,
         }
     )
 
@@ -299,10 +309,7 @@ def _(
 
 @app.cell
 def _(mo):
-    second_graph_type = mo.ui.switch(
-        value=False,
-        label="Logarithmic scale"
-    )
+    second_graph_type = mo.ui.switch(value=False, label="Logarithmic scale")
     second_graph_type
     return (second_graph_type,)
 
@@ -317,33 +324,39 @@ def _(
     second_graph_type,
     v_amp,
 ):
-    fourier_fig = make_subplots(rows=3, cols=1, 
-                        shared_xaxes=True,
-                        vertical_spacing=0.05,
-                        subplot_titles=("Vertical Component", 
-                                       "East-West Component", 
-                                       "North-South Component"))
+    fourier_fig = make_subplots(
+        rows=3,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        subplot_titles=(
+            "Vertical Component",
+            "East-West Component",
+            "North-South Component",
+        ),
+    )
 
     # Add traces for each component
     fourier_fig.add_trace(
-        go.Scatter(x=frequency_data, y=v_amp, 
-                  name='Vertical', 
-                  line=dict(color='blue')),
-        row=1, col=1
+        go.Scatter(x=frequency_data, y=v_amp, name="Vertical", line=dict(color="blue")),
+        row=1,
+        col=1,
     )
 
     fourier_fig.add_trace(
-        go.Scatter(x=frequency_data, y=ew_amp, 
-                  name='East-West', 
-                  line=dict(color='orange')),
-        row=2, col=1
+        go.Scatter(
+            x=frequency_data, y=ew_amp, name="East-West", line=dict(color="orange")
+        ),
+        row=2,
+        col=1,
     )
 
     fourier_fig.add_trace(
-        go.Scatter(x=frequency_data, y=ns_amp, 
-                  name='North-South', 
-                  line=dict(color='green')),
-        row=3, col=1
+        go.Scatter(
+            x=frequency_data, y=ns_amp, name="North-South", line=dict(color="green")
+        ),
+        row=3,
+        col=1,
     )
 
     # Update layout
@@ -352,7 +365,7 @@ def _(
         width=900,
         title_text="Fourier Transformation of Seismic Signal Components",
         showlegend=True,
-        hovermode="x unified"
+        hovermode="x unified",
     )
 
     fourier_fig_xaxis_title = "Frequency (Hz)"
@@ -364,9 +377,9 @@ def _(
     fourier_fig.update_xaxes(title_text=fourier_fig_xaxis_title, row=3, col=1)
 
     if second_graph_type.value:
-        fourier_fig.update_yaxes(type='log')
+        fourier_fig.update_yaxes(type="log")
     else:
-        fourier_fig.update_yaxes(type='linear')
+        fourier_fig.update_yaxes(type="linear")
 
     fourier_fig
     return
@@ -383,9 +396,7 @@ def _(ew_amp, fourier_df, np, ns_amp, v_amp):
 
 @app.cell
 def _(mo):
-    hvsr_type = mo.ui.switch(
-        value=False,label="Logarithmic"
-    )
+    hvsr_type = mo.ui.switch(value=False, label="Logarithmic")
     hvsr_type
     return (hvsr_type,)
 
@@ -395,21 +406,19 @@ def _(frequency_data, go, hvsr, hvsr_type):
     # Plot HVSR plot
     figure = go.Figure()
 
-    figure.add_trace(
-        go.Scatter(x=frequency_data, y=hvsr, name="HVSR", mode="lines")
-    )
+    figure.add_trace(go.Scatter(x=frequency_data, y=hvsr, name="HVSR", mode="lines"))
 
     figure.update_layout(
         title="HVSR Plot",  # FIX 4: Add a main plot title
-        xaxis_title="Frequency (Hz)", # FIX 5: More descriptive x-axis title
-        yaxis_title="HVSR Amplitude", # FIX 6: Add a y-axis title
-        hovermode="x unified" # FIX 7: Improve hover experience
+        xaxis_title="Frequency (Hz)",  # FIX 5: More descriptive x-axis title
+        yaxis_title="HVSR Amplitude",  # FIX 6: Add a y-axis title
+        hovermode="x unified",  # FIX 7: Improve hover experience
     )
 
     if hvsr_type.value:
-        figure.update_yaxes(type='log')
+        figure.update_yaxes(type="log")
     else:
-        figure.update_yaxes(type='linear')
+        figure.update_yaxes(type="linear")
 
     figure
     return
