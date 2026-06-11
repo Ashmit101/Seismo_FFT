@@ -1,0 +1,146 @@
+name: Build and Release Executables
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build — ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false          # keep building other platforms even if one fails
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact: ground_motion_analyzer-linux
+
+          - os: windows-latest
+            platform: windows
+            artifact: ground_motion_analyzer-windows.exe
+
+          - os: macos-latest
+            platform: macos
+            artifact: ground_motion_analyzer-macos
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+          if [ -f requirements.txt ]; then
+            echo "requirements.txt found — installing..."
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found — skipping."
+          fi
+
+      - name: Build with PyInstaller
+        run: >
+          pyinstaller
+          --onefile
+          --clean
+          --name ground_motion_analyzer
+          ground_motion_analyzer.py
+
+      - name: Stage artifact (Unix)
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: |
+          mkdir staging
+          cp dist/ground_motion_analyzer staging/${{ matrix.artifact }}
+          chmod +x staging/${{ matrix.artifact }}
+
+      - name: Stage artifact (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path staging | Out-Null
+          Copy-Item dist\ground_motion_analyzer.exe staging\${{ matrix.artifact }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging/${{ matrix.artifact }}
+          retention-days: 1     # short-lived; the Release is the permanent home
+
+  release:
+    name: Publish GitHub Release
+    needs: build             # only runs after all three builds succeed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true  # puts all files directly in release-assets/
+
+      - name: List release assets
+        run: ls -lh release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "build-${{ github.run_number }}"
+          name: "Build #${{ github.run_number }}"
+          body: |
+            ## Ground Motion Analyzer — Automated Build
+
+            | | |
+            |---|---|
+            | **Commit** | `${{ github.sha }}` |
+            | **Branch** | `${{ github.ref_name }}` |
+            | **Workflow run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            ---
+
+            ### Downloads
+
+            | Platform | File |
+            |----------|------|
+            | 🐧 Linux  | `ground_motion_analyzer-linux` |
+            | 🪟 Windows | `ground_motion_analyzer-windows.exe` |
+            | 🍎 macOS  | `ground_motion_analyzer-macos` |
+
+            ---
+
+            ### First-run notes
+
+            **Linux**
+            ```bash
+            chmod +x ground_motion_analyzer-linux
+            ./ground_motion_analyzer-linux
+            ```
+
+            **macOS** — Gatekeeper will block an unsigned binary on first run:
+            ```bash
+            chmod +x ground_motion_analyzer-macos
+            xattr -d com.apple.quarantine ground_motion_analyzer-macos
+            ./ground_motion_analyzer-macos
+            ```
+
+            **Windows** — SmartScreen may warn about an unsigned `.exe`.
+            Click **More info → Run anyway** to proceed.
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

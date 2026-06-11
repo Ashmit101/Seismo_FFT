@@ -10,3 +10,5 @@ sample/
 .idea/
 .aider*
 *~
+dist
+build/
