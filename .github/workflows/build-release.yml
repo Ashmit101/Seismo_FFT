@@ -1,14 +1,21 @@
 name: Build and Release Executables
 
+# ─────────────────────────────────────────────
+#  Trigger: every push to the main branch
+# ─────────────────────────────────────────────
 on:
   push:
     branches:
       - main
 
+# Required so the workflow can create Releases and upload assets
 permissions:
   contents: write
 
 jobs:
+  # ════════════════════════════════════════════
+  #  JOB 1 — Build on all three platforms
+  # ════════════════════════════════════════════
   build:
     name: Build — ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -29,20 +36,24 @@ jobs:
             artifact: ground_motion_analyzer-macos
 
     steps:
+      # ── 1. Check out source code ────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ── 2. Set up Python ────────────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ── 3. Install PyInstaller + project dependencies ───────────────────
       - name: Install dependencies
         shell: bash
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install pyinstaller
 
+          # Install your project's own dependencies if the file exists
           if [ -f requirements.txt ]; then
             echo "requirements.txt found — installing..."
             pip install -r requirements.txt
@@ -50,14 +61,35 @@ jobs:
             echo "No requirements.txt found — skipping."
           fi
 
-      - name: Build with PyInstaller
-        run: >
-          pyinstaller
-          --onefile
-          --clean
-          --name ground_motion_analyzer
-          ground_motion_analyzer.py
+      # ── 4. Detect which scientific packages are installed ───────────────
+      #  PyInstaller cannot auto-discover compiled C extensions inside
+      #  packages like numpy, scipy, pandas, etc.
+      #  --collect-all <pkg> forces all submodules + data files to be bundled.
+      - name: Collect installed scientific packages
+        id: sci_pkgs
+        shell: bash
+        run: |
+          FLAGS=""
+          for pkg in numpy scipy pandas matplotlib obspy; do
+            if python -c "import $pkg" 2>/dev/null; then
+              echo "  ✔ $pkg found — adding --collect-all $pkg"
+              FLAGS="$FLAGS --collect-all $pkg"
+            fi
+          done
+          echo "collect_flags=$FLAGS" >> "$GITHUB_OUTPUT"
 
+      # ── 5. Build the single-file executable ─────────────────────────────
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller \
+            --onefile \
+            --clean \
+            ${{ steps.sci_pkgs.outputs.collect_flags }} \
+            --name ground_motion_analyzer \
+            ground_motion_analyzer.py
+
+      # ── 5a. Stage artifact (Linux / macOS) ──────────────────────────────
       - name: Stage artifact (Unix)
         if: matrix.platform != 'windows'
         shell: bash
@@ -66,6 +98,7 @@ jobs:
           cp dist/ground_motion_analyzer staging/${{ matrix.artifact }}
           chmod +x staging/${{ matrix.artifact }}
 
+      # ── 5b. Stage artifact (Windows) ────────────────────────────────────
       - name: Stage artifact (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -73,6 +106,7 @@ jobs:
           New-Item -ItemType Directory -Path staging | Out-Null
           Copy-Item dist\ground_motion_analyzer.exe staging\${{ matrix.artifact }}
 
+      # ── 6. Upload artifact so the release job can grab it ───────────────
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -80,21 +114,27 @@ jobs:
           path: staging/${{ matrix.artifact }}
           retention-days: 1     # short-lived; the Release is the permanent home
 
+  # ════════════════════════════════════════════
+  #  JOB 2 — Collect artifacts & publish Release
+  # ════════════════════════════════════════════
   release:
     name: Publish GitHub Release
     needs: build             # only runs after all three builds succeed
     runs-on: ubuntu-latest
 
     steps:
+      # ── 1. Pull all three executables into one flat directory ────────────
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true  # puts all files directly in release-assets/
 
+      # ── 2. Quick sanity check ────────────────────────────────────────────
       - name: List release assets
         run: ls -lh release-assets/
 
+      # ── 3. Create the GitHub Release and attach the executables ──────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
