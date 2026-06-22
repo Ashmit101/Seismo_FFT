@@ -46,7 +46,7 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
-          pyinstaller \
+          uv run pyinstaller \
             --onefile \
             --clean \
             --name ground_motion_analyzer \
