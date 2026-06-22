@@ -1,26 +1,19 @@
 name: Build and Release Executables
 
-# ─────────────────────────────────────────────
-#  Trigger: every push to the main branch
-# ─────────────────────────────────────────────
 on:
   push:
     branches:
       - main
 
-# Required so the workflow can create Releases and upload assets
 permissions:
   contents: write
 
 jobs:
-  # ════════════════════════════════════════════
-  #  JOB 1 — Build on all three platforms
-  # ════════════════════════════════════════════
   build:
     name: Build — ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false          # keep building other platforms even if one fails
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -36,60 +29,29 @@ jobs:
             artifact: ground_motion_analyzer-macos
 
     steps:
-      # ── 1. Check out source code ────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── 2. Set up Python ────────────────────────────────────────────────
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          python-version: "3.11"
+          version: "0.11.23"
 
-      # ── 3. Install PyInstaller + project dependencies ───────────────────
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install pyinstaller
+      - name: Set up Python 3.11
+        run: uv python install
 
-          # Install your project's own dependencies if the file exists
-          if [ -f requirements.txt ]; then
-            echo "requirements.txt found — installing..."
-            pip install -r requirements.txt
-          else
-            echo "No requirements.txt found — skipping."
-          fi
+      - name: Install project
+        run: uv sync --locked --all-extras --dev
 
-      # ── 4. Detect which scientific packages are installed ───────────────
-      #  PyInstaller cannot auto-discover compiled C extensions inside
-      #  packages like numpy, scipy, pandas, etc.
-      #  --collect-all <pkg> forces all submodules + data files to be bundled.
-      - name: Collect installed scientific packages
-        id: sci_pkgs
-        shell: bash
-        run: |
-          FLAGS=""
-          for pkg in numpy scipy pandas matplotlib obspy; do
-            if python -c "import $pkg" 2>/dev/null; then
-              echo "  ✔ $pkg found — adding --collect-all $pkg"
-              FLAGS="$FLAGS --collect-all $pkg"
-            fi
-          done
-          echo "collect_flags=$FLAGS" >> "$GITHUB_OUTPUT"
-
-      # ── 5. Build the single-file executable ─────────────────────────────
       - name: Build with PyInstaller
         shell: bash
         run: |
           pyinstaller \
             --onefile \
             --clean \
-            ${{ steps.sci_pkgs.outputs.collect_flags }} \
             --name ground_motion_analyzer \
             ground_motion_analyzer.py
 
-      # ── 5a. Stage artifact (Linux / macOS) ──────────────────────────────
       - name: Stage artifact (Unix)
         if: matrix.platform != 'windows'
         shell: bash
@@ -98,7 +60,6 @@ jobs:
           cp dist/ground_motion_analyzer staging/${{ matrix.artifact }}
           chmod +x staging/${{ matrix.artifact }}
 
-      # ── 5b. Stage artifact (Windows) ────────────────────────────────────
       - name: Stage artifact (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -106,7 +67,6 @@ jobs:
           New-Item -ItemType Directory -Path staging | Out-Null
           Copy-Item dist\ground_motion_analyzer.exe staging\${{ matrix.artifact }}
 
-      # ── 6. Upload artifact so the release job can grab it ───────────────
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
