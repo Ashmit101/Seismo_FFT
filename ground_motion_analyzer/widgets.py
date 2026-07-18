@@ -15,7 +15,7 @@ class Header(tk.Frame):
             text=title,
             bg=Palette.BG,
             fg=Palette.ACCENT2,
-            font=("Consolas", 28, "bold"),
+            font=("Consolas", 32, "bold"),
             ).grid(row=0, column=0)
 
         tk.Label(
@@ -23,7 +23,7 @@ class Header(tk.Frame):
             text=developer,
             bg=Palette.BG,
             fg=Palette.ACCENT2,
-            font=("Consolas", 16, "bold"),
+            font=("Consolas", 18, "bold"),
             ).grid(row=1,column=0)
 
 
@@ -36,7 +36,7 @@ class SectionHeader(tk.Frame):
                          text=f"▸ {title}",
                          bg=Palette.BG,
                          fg=Palette.ACCENT,
-                         font=("Consolas", 10, "bold")
+                         font=("Consolas", 12, "bold")
                          )
         label.grid(row=0,
                    column=0,
