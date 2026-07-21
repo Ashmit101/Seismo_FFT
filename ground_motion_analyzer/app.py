@@ -22,7 +22,7 @@ class Application(tk.Tk):
 
     def _configure_window(self):
         self.title("Ground Motion Analyzer")
-        self.geometry("1200x780")
+        self.geometry("1920x1080")
         self.configure(bg="#F2EAE3")
 
     def _configure_scaling(self):

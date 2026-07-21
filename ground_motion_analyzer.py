@@ -3,7 +3,6 @@ Ground Motion File Loader & Analyzer
 Supports single-column (with dt) and two-column (time, data) formats.
 Plots: Time vs Ground Motion, Frequency vs Fourier Spectrum
 """
-
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import numpy as np
@@ -34,6 +33,12 @@ BORDER = "#8D8961"  # Olive – subtle border
 class GroundMotionApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        try:
+            dpi = self.winfo_fpixels('1i')  # pixels per inch
+            scale = dpi / 96.0
+            self.tk.call('tk', 'scaling', scale)
+        except Exception:
+            pass
         self.title("Ground Motion Analyzer")
         self.geometry("1200x780")
         self.configure(bg=BG)
