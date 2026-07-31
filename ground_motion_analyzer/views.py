@@ -19,4 +19,5 @@ class MainView(tk.Frame):
             developer="Ashmit Rajaure"
         ).grid(row=0, column=0, sticky="w", pady=(0, 12))
         
-        w.ControlPanel(self, bg=Palette.BG).grid(row=1, column=0, sticky="nw")
+        w.ControlPanel(self, bg=Palette.BG).grid(row=1, column=0, sticky=(tk.N + tk.S + tk.W))
+        w.PlotArea(self).grid(row=1, column=1, sticky=(tk.N + tk.S + tk.E))
