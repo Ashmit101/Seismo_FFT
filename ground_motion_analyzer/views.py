@@ -11,13 +11,15 @@ class MainView(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
         w.Header(
             self,
             title="Ground Motion Analyzer",
             developer="Ashmit Rajaure"
-        ).grid(row=0, column=0, sticky="w", pady=(0, 12))
+        ).grid(row=0, column=0, columnspan=2, sticky=(tk.N + tk.E + tk.W + tk.S), pady=(0, 12))
         
         w.ControlPanel(self, bg=Palette.BG).grid(row=1, column=0, sticky=(tk.N + tk.S + tk.W))
-        w.PlotArea(self).grid(row=1, column=1, sticky=(tk.N + tk.S + tk.E))
+        w.PlotArea(self).grid(row=1, column=1, sticky=(tk.N + tk.S + tk.E + tk.W))

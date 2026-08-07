@@ -12,16 +12,16 @@ class Application(tk.Tk):
 
         self._configure_window()
         self._configure_scaling()
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
         self.main_view = MainView(self)
         self.main_view.grid(row=0, ipadx=10, ipady=10, sticky="nsew")
 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
 
     def _configure_window(self):
         self.title("Ground Motion Analyzer")
-        self.geometry("1920x1080")
+        self.geometry("1280x800")
 
     def _configure_scaling(self):
         try:

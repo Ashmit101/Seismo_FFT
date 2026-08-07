@@ -18,6 +18,7 @@ class Header(tk.Frame):
 
     def __init__(self, parent, title, developer):
         super().__init__(parent, bg=Palette.BG, pady=10)
+        self.grid_columnconfigure(0, weight=1)
 
         tk.Label(
             self,
@@ -39,11 +40,9 @@ class Header(tk.Frame):
 class ColumnFormatRadioButton(tk.LabelFrame):
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
+        super().__init__(parent, text="Column Format", *args, **kwargs)
 
         self.column_mode = tk.StringVar(value="single")
-
-        _header(self, "Column Format")
 
         # Single column
         for index, (val, label) in enumerate([
@@ -58,30 +57,18 @@ class ColumnFormatRadioButton(tk.LabelFrame):
                 command=self._on_mode_change,
             )
             rb.grid(row=index+1,
-                    column=0)
+                    column=0,
+                    sticky=(tk.W))
 
     def _on_mode_change(self):
         # Emit signal
         print("Column format changed")
 
-
-def _header(parent, title, *args, **kwargs):
-    header_label = tk.Label(parent,
-                            text=title,
-                            *args,
-                            **kwargs
-                            )
-    header_label.grid(row=0,
-                      column=0,
-                      sticky=(tk.W + tk.E)
-                      )
-
+        
 class SingleColumnParams(tk.LabelFrame):
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
-
-        _header(self, "Single Column Options")
+        super().__init__(parent, text="Single Column Options", *args, **kwargs)
 
         tk.Label(
             self,
@@ -93,7 +80,7 @@ class SingleColumnParams(tk.LabelFrame):
             self,
             textvariable=self.dt_var,
         )
-        self.dt_entry.grid(row=1, column=1)
+        self.dt_entry.grid(row=2, column=0)
 
 
 class DoubleColumnParams(tk.LabelFrame):
@@ -101,9 +88,7 @@ class DoubleColumnParams(tk.LabelFrame):
 
     def __init__(self, parent, *args, **kwargs):
         """Double Column Params Initializer"""
-        super().__init__(parent, *args, **kwargs)
-
-        _header(self, "Double Column Params")
+        super().__init__(parent, text="Double Column Params", *args, **kwargs)
 
         self.factor_var = tk.StringVar(value="")
 
@@ -112,7 +97,7 @@ class DoubleColumnParams(tk.LabelFrame):
                  ).grid(row=1, column=0)
         tk.Entry(self,
                  textvariable=self.factor_var
-                 ).grid(row=1, column=1)
+                 ).grid(row=2, column=0)
 
 
 class FileSelector(tk.LabelFrame):
@@ -134,17 +119,18 @@ class FileSelector(tk.LabelFrame):
 class Statistics(tk.LabelFrame):
     """Statistics of data"""
     def __init__(self, parent, stats: dict, *args, **kwargs):
-        super().__init__(parent, text="Statistics")
+        super().__init__(parent, text="Statistics", *args, **kwargs)
         
         self.textbox = tk.Text(self,
                                bg=Palette.ENTRY_BG,
                                fg=Palette.SUBTEXT,
                                relief=tk.FLAT,
+                               width=30,
                                height=7,
                                state=tk.DISABLED,
                                highlightthickness=0,
                                )
-        self.textbox.grid()
+        self.textbox.grid(row=0, column=0)
     
 
 class ControlPanel(tk.Frame):
@@ -177,6 +163,9 @@ class PlotArea(tk.Frame):
 
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        
         plt.style.use("dark_background")
         self.fig = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
         self.fig.subplots_adjust(
@@ -199,8 +188,16 @@ class PlotArea(tk.Frame):
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.draw()
-        self.canvas.get_tk_widget().grid()
+        widget = self.canvas.get_tk_widget()
+        widget.grid(row=0, column=0, sticky=(tk.N + tk.E + tk.S + tk.W))
 
+        toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
+        toolbar_frame.grid(sticky=(tk.S + tk.W + tk.E))
+        toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
+        toolbar.config(bg=Palette.PANEL)
+        toolbar.update()
+        
+        
     def _create_plot_area(self, subplot: Axes, title: str, xlabel: str, ylabel: str):
         subplot.set_facecolor(Palette.PANEL)
         for spine in subplot.spines.values():
