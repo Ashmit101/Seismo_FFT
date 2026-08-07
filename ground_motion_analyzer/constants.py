@@ -17,3 +17,13 @@ class Palette(StrEnum):
     BORDER = "#8D8961"  # Olive – subtle border
 
     
+class Events(StrEnum):
+    FILE_SELECTED = "<<FileSelected>>"
+    VARIABLES_UPDATED = "<<VariablesUpdated>>"
+    COLUMN_FORMAT_UPDATED = "<<ColumnFormatUpdated>>"
+    
+class ColumnMode(StrEnum):
+    """The column format in the signal data file"""
+    SINGLE = "single"
+    DOUBLE = "double"
+    

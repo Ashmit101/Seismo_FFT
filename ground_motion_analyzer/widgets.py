@@ -1,7 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 import matplotlib
-from matplotlib.font_manager import font_scalings
 
 
 matplotlib.use("TkAgg")
@@ -10,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from .constants import Palette
+from .constants import ColumnMode, Palette, Events
 
 
 class Header(tk.Frame):
@@ -42,12 +41,12 @@ class ColumnFormatRadioButton(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, text="Column Format", *args, **kwargs)
 
-        self.column_mode = tk.StringVar(value="single")
+        self.column_mode = tk.StringVar(value=ColumnMode.SINGLE)
 
         # Single column
         for index, (val, label) in enumerate([
-            ("single", "Single Column  (data only)"),
-            ("double", "Double Column  (time + data)"),
+            (ColumnMode.SINGLE, "Single Column  (data only)"),
+            (ColumnMode.DOUBLE, "Double Column  (time + data)"),
         ]):
             rb = ttk.Radiobutton(
                 self,
@@ -61,9 +60,11 @@ class ColumnFormatRadioButton(tk.LabelFrame):
                     sticky=(tk.W))
 
     def _on_mode_change(self):
-        # Emit signal
-        print("Column format changed")
+        self.event_generate(Events.COLUMN_FORMAT_UPDATED)
 
+    def get(self):
+        return self.column_mode.get()
+    
         
 class SingleColumnParams(tk.LabelFrame):
 
@@ -82,6 +83,9 @@ class SingleColumnParams(tk.LabelFrame):
         )
         self.dt_entry.grid(row=2, column=0)
 
+    def get(self):
+        return self.dt_var.get()
+
 
 class DoubleColumnParams(tk.LabelFrame):
     """Parameters for Double Column Format"""
@@ -99,6 +103,9 @@ class DoubleColumnParams(tk.LabelFrame):
                  textvariable=self.factor_var
                  ).grid(row=2, column=0)
 
+    def get(self):
+        return self.factor_var.get()
+
 
 class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
@@ -106,6 +113,7 @@ class FileSelector(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, text="File", *args, **kwargs)
 
+        self.data_file = None
         tk.Button(self,
                   text="Select File",
                   command=self._load_file,
@@ -113,8 +121,14 @@ class FileSelector(tk.LabelFrame):
                          column=0)
 
     def _load_file(self):
-        print("Loading file")
-        
+        signal_data = filedialog.askopenfile(title="Select signal data file", filetypes=[("CSV", "*.csv")])
+
+        if signal_data:
+            self.event_generate(Events.FILE_SELECTED)
+            self.data_file = signal_data
+
+    def get_file(self):
+        return self.data_file
 
 class Statistics(tk.LabelFrame):
     """Statistics of data"""
@@ -139,8 +153,11 @@ class ControlPanel(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
+        self.control_variables = {}
+
         self.column_format = ColumnFormatRadioButton(self)
         self.column_format.grid(row=1, column=0, sticky=(tk.W + tk.E))
+        self.column_format.bind(Events.COLUMN_FORMAT_UPDATED, self._column_format_updated)
 
         self.single_col_options = SingleColumnParams(self)
         self.single_col_options.grid(row=2,
@@ -149,15 +166,40 @@ class ControlPanel(tk.Frame):
         # Double Column Params
         self.double_col_params = DoubleColumnParams(self)
         self.double_col_params.grid(row=3, column=0, sticky=(tk.W + tk.E))
-
+        self.double_col_params.grid_remove()
+        
         # File Selector
         self.file_selector = FileSelector(self)
         self.file_selector.grid(row=4, column=0, sticky=(tk.W + tk.E))
+        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
 
         self.statitics = Statistics(self, {})
         self.statitics.grid(row=5, column=0, sticky=(tk.W + tk.E))
 
 
+    def _file_selected(self, *_):
+        self.control_variables["signal_data_file"] = self.file_selector.get_file()
+        self.event_generate(Events.VARIABLES_UPDATED)
+        self.event_generate(Events.FILE_SELECTED)
+
+    def _column_format_updated(self, *_):
+        column_mode = self.column_format.get()
+        self.control_variables["column_format"] = column_mode
+
+        if column_mode == ColumnMode.SINGLE:
+            self.double_col_params.grid_remove()
+            self.single_col_options.grid()
+            self.control_variables["time_increment"] = self.single_col_options.get()
+        else:
+            self.single_col_options.grid_remove()
+            self.double_col_params.grid()
+            self.control_variables["scale_factor"] = self.double_col_params.get()
+
+        self.event_generate(Events.VARIABLES_UPDATED)
+
+    def get(self):
+        return self.control_variables
+        
 class PlotArea(tk.Frame):
     """The plots of the signal data"""
 
