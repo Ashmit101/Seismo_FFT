@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
+from tkinter import messagebox
 import matplotlib
 
 
@@ -124,9 +125,9 @@ class FileSelector(tk.LabelFrame):
         signal_data = filedialog.askopenfile(title="Select signal data file", filetypes=[("CSV", "*.csv")])
 
         if signal_data:
-            self.event_generate(Events.FILE_SELECTED)
             self.data_file = signal_data
-
+            self.event_generate(Events.FILE_SELECTED)
+      
     def get_file(self):
         return self.data_file
 
@@ -198,8 +199,15 @@ class ControlPanel(tk.Frame):
         self.event_generate(Events.VARIABLES_UPDATED)
 
     def get(self):
-        return self.control_variables
+        control_variables = {
+            "column_format": self.column_format.get(),
+            "time_increment": self.single_col_options.get(),
+            "scale_factor": self.double_col_params.get(),
+            "file": self.file_selector.get_file()
+            }
+        return control_variables
         
+
 class PlotArea(tk.Frame):
     """The plots of the signal data"""
 
@@ -238,7 +246,7 @@ class PlotArea(tk.Frame):
         toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
         toolbar.config(bg=Palette.PANEL)
         toolbar.update()
-        
+
         
     def _create_plot_area(self, subplot: Axes, title: str, xlabel: str, ylabel: str):
         subplot.set_facecolor(Palette.PANEL)
@@ -266,3 +274,10 @@ class PlotArea(tk.Frame):
             fontsize=12,
             fontfamily="monospace",
             )
+
+    def plot(self, motion_data: list[float], time_data: list[float] | None = None):
+        """Plot the given data"""
+        print(f"Motion data: {motion_data}\nTime data: {time_data}")
+        
+
+        
