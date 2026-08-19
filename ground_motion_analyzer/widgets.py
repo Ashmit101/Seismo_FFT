@@ -1,10 +1,16 @@
+from loguru import logger
 import tkinter as tk
 from tkinter import ttk, filedialog
 from tkinter import messagebox
 import matplotlib
-
+import pandas as pd
+import numpy as np
 
 matplotlib.use("TkAgg")
+matplotlib.rcParams["path.simplify"] = True
+matplotlib.rcParams["path.simplify_threshold"] = 1.0
+matplotlib.rcParams["agg.path.chunksize"] = 10000
+
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -77,10 +83,13 @@ class SingleColumnParams(tk.LabelFrame):
             text="Time Increment (dt)  [s]",
         ).grid(row=1, column=0)
         
-        self.dt_var = tk.StringVar(value="0.01")
-        self.dt_entry = tk.Entry(
+        self.dt_var = tk.DoubleVar(value=0.01)
+        self.dt_entry = tk.Spinbox(
             self,
             textvariable=self.dt_var,
+            from_=0,
+            to=100,
+            increment=0.01,
         )
         self.dt_entry.grid(row=2, column=0)
 
@@ -275,9 +284,45 @@ class PlotArea(tk.Frame):
             fontfamily="monospace",
             )
 
-    def plot(self, motion_data: list[float], time_data: list[float] | None = None):
+    def plot(self, motion_data, *, time_data = None, time_increment = 0.01):
         """Plot the given data"""
-        print(f"Motion data: {motion_data}\nTime data: {time_data}")
-        
+        logger.info(f"Plotting {len(motion_data)} data points")
 
+        motion_data = pd.to_numeric(motion_data, errors='coerce')
+        motion_data = motion_data.dropna()
+        motion_data = motion_data.to_numpy()
         
+        self.ax_time.cla()
+        self.ax_time.set_facecolor(Palette.PANEL)
+        self.ax_time.tick_params(colors=Palette.SUBTEXT, labelsize=8)
+        for sp in self.ax_time.spines.values():
+            sp.set_edgecolor(Palette.BORDER)
+
+        if time_data is None:
+            logger.info("Calculating time series")
+            t0 = 0.0
+            time_data = np.array([t0 + i * time_increment for i in range(len(motion_data))])
+            logger.info("Time series calcution completed")
+
+        self.ax_time.plot(time_data, motion_data,
+                          color=Palette.ACCENT2,
+                          linewidth=0.9,
+                          alpha=0.9)
+        self.ax_time.fill_between(time_data, motion_data, alpha=0.15, color=Palette.ACCENT2)
+        self.ax_time.axhline(0, color=Palette.BORDER, linewidth=0.7, linestyle="--")
+
+        self.ax_time.set_title(
+            "Time vs Ground Motion",
+            color=Palette.TEXT,
+            fontsize=10,
+            fontfamily="monospace",
+            pad=8,
+        )
+        self.ax_time.set_xlabel("Time (s)", color=Palette.SUBTEXT, fontsize=8)
+        self.ax_time.set_ylabel("Amplitude", color=Palette.SUBTEXT, fontsize=8)
+        self.ax_time.grid(True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6)
+        logger.debug("Title labels and grid done")
+        
+        # self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=3.0)
+        logger.debug("Drawing the canvas")
+        self.canvas.draw_idle()
