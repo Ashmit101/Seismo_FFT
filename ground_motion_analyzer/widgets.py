@@ -325,4 +325,31 @@ class PlotArea(tk.Frame):
         
         # self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=3.0)
         logger.debug("Drawing the canvas")
+
+        # ── Fourier spectrum
+        self.ax_fourier.cla()
+        self.ax_fourier.set_facecolor(Palette.PANEL)
+        self.ax_fourier.tick_params(colors=Palette.SUBTEXT, labelsize=8)
+        for sp in self.ax_fourier.spines.values():
+            sp.set_edgecolor(Palette.BORDER)
+
+        n = len(motion_data)
+        fft_vals = np.abs(np.fft.rfft(motion_data)) / n
+        freqs = np.fft.rfftfreq(n, d=time_increment)
+
+        self.ax_fourier.plot(freqs, fft_vals, color=Palette.ACCENT, linewidth=0.9)
+        self.ax_fourier.fill_between(freqs, fft_vals, alpha=0.2, color=Palette.ACCENT)
+
+        self.ax_fourier.set_title(
+            "Fourier Spectrum", color=Palette.TEXT, fontsize=10, fontfamily="monospace", pad=8
+        )
+        self.ax_fourier.set_xlabel("Frequency (Hz)", color=Palette.SUBTEXT, fontsize=8)
+        self.ax_fourier.set_ylabel("Amplitude", color=Palette.SUBTEXT, fontsize=8)
+        self.ax_fourier.grid(
+            True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6
+        )
+
+        self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=3.0)
+
+
         self.canvas.draw_idle()
