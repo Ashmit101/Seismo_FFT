@@ -31,3 +31,9 @@ dependencies = [
     "six==1.17.0",
     "tzdata==2025.2",
 ]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "jupyterlab>=4.6.3",
+]
