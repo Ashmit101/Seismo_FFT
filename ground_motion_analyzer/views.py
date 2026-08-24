@@ -1,7 +1,6 @@
 from loguru import logger
 import pandas as pd
 import tkinter as tk
-from tkinter import ttk
 
 from . import widgets as w
 from .constants import ColumnMode, Events, Palette

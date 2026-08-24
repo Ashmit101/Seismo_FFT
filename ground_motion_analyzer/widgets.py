@@ -117,6 +117,128 @@ class DoubleColumnParams(tk.LabelFrame):
         return self.factor_var.get()
 
 
+class Filtering(tk.LabelFrame):
+    """Parameters for filtering"""
+
+    filter_types = ["lowpass", "highpass", "bandpass", "bandstop"]
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, text="Filtering", **kwargs)
+
+        self.filter_on = tk.BooleanVar(value=False)
+        self.filter_type = tk.StringVar(value=self.filter_types[0])
+        self.cutoff_frequency = tk.DoubleVar(value=10.0)   # used for lowpass/highpass, and as LOW cutoff for band*
+        self.cutoff_frequency_high = tk.DoubleVar(value=20.0)  # used as HIGH cutoff for bandpass/bandstop
+        self.filter_order = tk.IntVar(value=4)
+
+        # --- Enable filter ---
+        ttk.Checkbutton(
+            self,
+            variable=self.filter_on,
+            text="Filter"
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=4, pady=2)
+
+        # --- Filter type ---
+        ttk.Label(self, text="Type:").grid(row=1, column=0, sticky="w", padx=4)
+        self.filter_type_combo = ttk.Combobox(
+            self,
+            textvariable=self.filter_type,
+            values=self.filter_types,
+            state="readonly",
+            width=10
+        )
+        self.filter_type_combo.grid(row=1, column=1, padx=4, pady=2)
+        self.filter_type_combo.bind("<<ComboboxSelected>>", self._on_type_change)
+
+        # --- Low / primary cutoff ---
+        self.cutoff_label = ttk.Label(self, text="Cutoff (Hz):")
+        self.cutoff_label.grid(row=2, column=0, sticky="w", padx=4)
+        self.cutoff_spin = ttk.Spinbox(
+            self,
+            textvariable=self.cutoff_frequency,
+            from_=0.01,
+            to=100.0,
+            increment=0.1,
+            width=10
+        )
+        self.cutoff_spin.grid(row=2, column=1, padx=4, pady=2)
+
+        # --- High cutoff (only for bandpass/bandstop) ---
+        self.cutoff_high_label = ttk.Label(self, text="High cutoff (Hz):")
+        self.cutoff_high_spin = ttk.Spinbox(
+            self,
+            textvariable=self.cutoff_frequency_high,
+            from_=0.01,
+            to=100.0,
+            increment=0.1,
+            width=10
+        )
+        # gridded/hidden dynamically in _on_type_change
+
+        # --- Filter order ---
+        ttk.Label(self, text="Order:").grid(row=4, column=0, sticky="w", padx=4)
+        ttk.Spinbox(
+            self,
+            textvariable=self.filter_order,
+            from_=1,
+            to=10,
+            increment=1,
+            width=10
+        ).grid(row=4, column=1, padx=4, pady=2)
+
+        self._on_type_change()  # set initial visibility state
+        self._bind_change_events()
+
+    def _bind_change_events(self):
+        """Attach trace callbacks so any parameter change emits CHANGE_EVENT."""
+        for var in (
+            self.filter_on,
+            self.filter_type,
+            self.cutoff_frequency,
+            self.cutoff_frequency_high,
+            self.filter_order,
+        ):
+            var.trace_add("write", self._emit_change)
+
+    def _emit_change(self, *_):
+        try:
+            self.event_generate(Events.FILTER_PARAMS_UPDATED, when="tail")
+            logger.info("Filter params updated")
+        except tk.TclError:
+            pass                # widget destroyed or not ready yet
+
+    def _on_type_change(self, event=None):
+        """Show/hide the high-cutoff field depending on filter type."""
+        needs_band = self.filter_type.get() in ("bandpass", "bandstop")
+
+        if needs_band:
+            self.cutoff_label.config(text="Low cutoff (Hz):")
+            self.cutoff_high_label.grid(row=3, column=0, sticky="w", padx=4)
+            self.cutoff_high_spin.grid(row=3, column=1, padx=4, pady=2)
+        else:
+            self.cutoff_label.config(text="Cutoff (Hz):")
+            self.cutoff_high_label.grid_remove()
+            self.cutoff_high_spin.grid_remove()
+
+    def get(self):
+        filter_type = self.filter_type.get()
+        params = {
+            "is_filter_on": self.filter_on.get(),
+            "filter_type": filter_type,
+            "order": self.filter_order.get(),
+        }
+
+        if filter_type in ("bandpass", "bandstop"):
+            params["cutoff_frequency"] = [
+                self.cutoff_frequency.get(),
+                self.cutoff_frequency_high.get(),
+            ]
+        else:
+            params["cutoff_frequency"] = self.cutoff_frequency.get()
+
+        return params
+
+
 class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
 
@@ -183,13 +305,20 @@ class ControlPanel(tk.Frame):
         self.file_selector.grid(row=4, column=0, sticky=(tk.W + tk.E))
         self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
 
-        self.statitics = Statistics(self, {})
-        self.statitics.grid(row=5, column=0, sticky=(tk.W + tk.E))
+        self.filtering = Filtering(self)
+        self.filtering.grid(row=5, column=0, sticky=(tk.W + tk.E))
+        self.filtering.bind(Events.FILTER_PARAMS_UPDATED, self._emit_values_change)
 
+        self.statitics = Statistics(self, {})
+        self.statitics.grid(row=6, column=0, sticky=(tk.W + tk.E))
+
+
+    def _emit_values_change(self, *_):
+        self.event_generate(Events.VARIABLES_UPDATED)
 
     def _file_selected(self, *_):
         self.control_variables["signal_data_file"] = self.file_selector.get_file()
-        self.event_generate(Events.VARIABLES_UPDATED)
+        self._emit_values_change()
         self.event_generate(Events.FILE_SELECTED)
 
     def _column_format_updated(self, *_):
@@ -205,14 +334,15 @@ class ControlPanel(tk.Frame):
             self.double_col_params.grid()
             self.control_variables["scale_factor"] = self.double_col_params.get()
 
-        self.event_generate(Events.VARIABLES_UPDATED)
+        self._emit_values_change()
 
     def get(self):
         control_variables = {
             "column_format": self.column_format.get(),
             "time_increment": self.single_col_options.get(),
             "scale_factor": self.double_col_params.get(),
-            "file": self.file_selector.get_file()
+            "file": self.file_selector.get_file(),
+            "filter": self.filtering.get(),
             }
         return control_variables
         

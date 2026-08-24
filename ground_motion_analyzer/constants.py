@@ -21,6 +21,7 @@ class Events(StrEnum):
     FILE_SELECTED = "<<FileSelected>>"
     VARIABLES_UPDATED = "<<VariablesUpdated>>"
     COLUMN_FORMAT_UPDATED = "<<ColumnFormatUpdated>>"
+    FILTER_PARAMS_UPDATED = "<<FilterParamsUpdated>>"
     
 class ColumnMode(StrEnum):
     """The column format in the signal data file"""
