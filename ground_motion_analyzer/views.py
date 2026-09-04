@@ -31,10 +31,15 @@ class MainView(tk.Frame):
 
         
     def _plot(self, *_):
-        control_variables = self.control_panel.get()
+        try:
+            control_variables = self.control_panel.get()
+        except tk.TclError:
+            # A numeric field can be briefly incomplete while the user types.
+            return
         logger.info(f"control variables: {control_variables}")
 
         if data_file := control_variables.get("file"):
+            data_file.seek(0)
             data = pd.read_csv(data_file)
             columns = data.columns
             logger.info(f"Columns: {columns}")
@@ -42,13 +47,23 @@ class MainView(tk.Frame):
             if control_variables["column_format"] == ColumnMode.SINGLE:
                 motion_data = data[columns[0]]
                 time_data = None
+                scale_factor = 1.0
             else:
                 time_data = data[columns[0]]
                 motion_data = data[columns[1]]
+                scale_factor_text = control_variables["scale_factor"].strip()
+                try:
+                    scale_factor = float(scale_factor_text or 1.0)
+                except ValueError:
+                    return
 
-            self.plot_area.plot(motion_data=motion_data,
-                                time_data=time_data,
-                                time_increment=control_variables["time_increment"])
+            self.plot_area.plot(
+                motion_data=motion_data,
+                time_data=time_data,
+                time_increment=control_variables["time_increment"],
+                filter_params=control_variables["filter"],
+                scale_factor=scale_factor,
+            )
         else:
             logger.info("No data file provided")
         

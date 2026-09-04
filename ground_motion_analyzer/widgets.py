@@ -17,6 +17,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from .constants import ColumnMode, Palette, Events
+from .filtering import filter_signal
 
 
 class Header(tk.Frame):
@@ -92,6 +93,13 @@ class SingleColumnParams(tk.LabelFrame):
             increment=0.01,
         )
         self.dt_entry.grid(row=2, column=0)
+        self.dt_var.trace_add("write", self._emit_change)
+
+    def _emit_change(self, *_):
+        try:
+            self.event_generate(Events.CONTROL_VALUE_UPDATED, when="tail")
+        except tk.TclError:
+            pass
 
     def get(self):
         return self.dt_var.get()
@@ -112,6 +120,13 @@ class DoubleColumnParams(tk.LabelFrame):
         tk.Entry(self,
                  textvariable=self.factor_var
                  ).grid(row=2, column=0)
+        self.factor_var.trace_add("write", self._emit_change)
+
+    def _emit_change(self, *_):
+        try:
+            self.event_generate(Events.CONTROL_VALUE_UPDATED, when="tail")
+        except tk.TclError:
+            pass
 
     def get(self):
         return self.factor_var.get()
@@ -294,11 +309,17 @@ class ControlPanel(tk.Frame):
         self.single_col_options = SingleColumnParams(self)
         self.single_col_options.grid(row=2,
                                      column=0, sticky=(tk.W + tk.E))
+        self.single_col_options.bind(
+            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
+        )
 
         # Double Column Params
         self.double_col_params = DoubleColumnParams(self)
         self.double_col_params.grid(row=3, column=0, sticky=(tk.W + tk.E))
         self.double_col_params.grid_remove()
+        self.double_col_params.bind(
+            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
+        )
         
         # File Selector
         self.file_selector = FileSelector(self)
@@ -381,7 +402,7 @@ class PlotArea(tk.Frame):
         widget.grid(row=0, column=0, sticky=(tk.N + tk.E + tk.S + tk.W))
 
         toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
-        toolbar_frame.grid(sticky=(tk.S + tk.W + tk.E))
+        toolbar_frame.grid(row=1, column=0, sticky=(tk.S + tk.W + tk.E))
         toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
         toolbar.config(bg=Palette.PANEL)
         toolbar.update()
@@ -414,14 +435,46 @@ class PlotArea(tk.Frame):
             fontfamily="monospace",
             )
 
-    def plot(self, motion_data, *, time_data = None, time_increment = 0.01):
+    def plot(
+        self,
+        motion_data,
+        *,
+        time_data=None,
+        time_increment=0.01,
+        filter_params=None,
+        scale_factor=1.0,
+    ):
         """Plot the given data"""
         logger.info(f"Plotting {len(motion_data)} data points")
 
-        motion_data = pd.to_numeric(motion_data, errors='coerce')
-        motion_data = motion_data.dropna()
-        motion_data = motion_data.to_numpy()
-        
+        motion_data = pd.to_numeric(motion_data, errors="coerce")
+        if time_data is None:
+            motion_data = motion_data.dropna().to_numpy()
+        else:
+            time_data = pd.to_numeric(time_data, errors="coerce")
+            valid = motion_data.notna() & time_data.notna()
+            motion_data = motion_data[valid].to_numpy()
+            time_data = time_data[valid].to_numpy()
+
+            time_steps = np.diff(time_data)
+            if len(time_steps) == 0 or np.any(time_steps <= 0):
+                raise ValueError("Time values must be strictly increasing.")
+            time_increment = float(np.median(time_steps))
+            if not np.allclose(time_steps, time_increment, rtol=1e-3, atol=1e-12):
+                raise ValueError("Filtering and FFT require uniformly sampled data.")
+
+        if time_increment <= 0:
+            raise ValueError("Time increment must be greater than zero.")
+
+        motion_data = motion_data * scale_factor
+
+        if filter_params is not None:
+            motion_data = filter_signal(
+                motion_data,
+                filter_params,
+                sampling_rate=1.0 / time_increment,
+            )
+
         self.ax_time.cla()
         self.ax_time.set_facecolor(Palette.PANEL)
         self.ax_time.tick_params(colors=Palette.SUBTEXT, labelsize=8)

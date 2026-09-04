@@ -20,6 +20,7 @@ class Palette(StrEnum):
 class Events(StrEnum):
     FILE_SELECTED = "<<FileSelected>>"
     VARIABLES_UPDATED = "<<VariablesUpdated>>"
+    CONTROL_VALUE_UPDATED = "<<ControlValueUpdated>>"
     COLUMN_FORMAT_UPDATED = "<<ColumnFormatUpdated>>"
     FILTER_PARAMS_UPDATED = "<<FilterParamsUpdated>>"
     
