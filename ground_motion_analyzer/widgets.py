@@ -19,12 +19,13 @@ from matplotlib.figure import Figure
 from .constants import ColumnMode, Palette, Events
 from .data_loading import detect_column_mode, read_signal_data
 from .filtering import filter_signal
+from .models import create_fourier_data
 
 
 class Header(tk.Frame):
     """Header displaying the name of project."""
 
-    def __init__(self, parent, title, developer):
+    def __init__(self, parent, title, developer, download_command=None):
         super().__init__(parent, bg=Palette.BG, pady=10)
         self.grid_columnconfigure(0, weight=1)
 
@@ -42,7 +43,27 @@ class Header(tk.Frame):
             bg=Palette.BG,
             fg=Palette.ACCENT2,
             font=("Consolas", 18, "bold"),
-            ).grid(row=1,column=0)
+            ).grid(row=1, column=0)
+
+        self.download_button = tk.Button(
+            self,
+            text="Download FFT Data",
+            command=download_command,
+            state=tk.DISABLED,
+            bg=Palette.BTN_BG,
+            fg=Palette.TEXT,
+            activebackground=Palette.BTN_HOV,
+            activeforeground=Palette.BG,
+            relief=tk.FLAT,
+            padx=12,
+            pady=7,
+            cursor="hand2",
+        )
+        self.download_button.place(relx=1.0, x=-16, y=4, anchor=tk.NE)
+
+    def set_download_enabled(self, enabled: bool):
+        state = tk.NORMAL if enabled else tk.DISABLED
+        self.download_button.configure(state=state)
         
 
 class ColumnFormatDisplay(tk.LabelFrame):
@@ -418,6 +439,7 @@ class PlotArea(tk.Frame):
 
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
+        self._fourier_data = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         
@@ -490,6 +512,7 @@ class PlotArea(tk.Frame):
         scale_factor=1.0,
     ):
         """Plot one or three signal components in time and frequency domains."""
+        self._fourier_data = None
         logger.info(f"Plotting {len(motion_data)} data points")
 
         if isinstance(motion_data, pd.DataFrame):
@@ -559,8 +582,12 @@ class PlotArea(tk.Frame):
         self.ax_time = time_axes[0]
         self.ax_fourier = fourier_axes[0]
         colours = (Palette.ACCENT2, Palette.ACCENT, Palette.SUCCESS)
-        sample_count = len(values)
-        frequencies = np.fft.rfftfreq(sample_count, d=time_increment)
+        self._fourier_data = create_fourier_data(
+            values,
+            time_increment=time_increment,
+            component_names=component_data.columns,
+        )
+        frequencies = self._fourier_data.iloc[:, 0].to_numpy()
 
         for index, component_name in enumerate(component_data.columns):
             signal = values[:, index]
@@ -576,7 +603,7 @@ class PlotArea(tk.Frame):
                 0, color=Palette.BORDER, linewidth=0.7, linestyle="--"
             )
 
-            fft_values = np.abs(np.fft.rfft(signal)) / sample_count
+            fft_values = self._fourier_data.iloc[:, index + 1].to_numpy()
             fourier_axis.plot(
                 frequencies, fft_values, color=colour, linewidth=0.9
             )
@@ -603,6 +630,12 @@ class PlotArea(tk.Frame):
         self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=2.0, w_pad=2.0)
         logger.debug("Drawing the canvas")
         self.canvas.draw_idle()
+
+    def get_fourier_data(self):
+        """Return a copy of the spectrum currently displayed, if available."""
+        if self._fourier_data is None:
+            return None
+        return self._fourier_data.copy()
 
     def _style_axis(self, axis: Axes, title: str, xlabel: str, ylabel: str):
         axis.set_facecolor(Palette.PANEL)
