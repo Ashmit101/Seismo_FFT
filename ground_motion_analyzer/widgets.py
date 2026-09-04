@@ -17,6 +17,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from .constants import ColumnMode, Palette, Events
+from .data_loading import detect_column_mode, read_signal_data
 from .filtering import filter_signal
 
 
@@ -44,31 +45,26 @@ class Header(tk.Frame):
             ).grid(row=1,column=0)
         
 
-class ColumnFormatRadioButton(tk.LabelFrame):
+class ColumnFormatDisplay(tk.LabelFrame):
+    """Display the column layout detected from the selected file."""
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, text="Column Format", *args, **kwargs)
+        super().__init__(parent, text="Detected Format", *args, **kwargs)
 
         self.column_mode = tk.StringVar(value=ColumnMode.SINGLE)
+        self.description = tk.StringVar(value="Select a file to detect its format")
+        ttk.Label(self, textvariable=self.description).grid(
+            row=0, column=0, sticky=tk.W, padx=4, pady=4
+        )
 
-        # Single column
-        for index, (val, label) in enumerate([
-            (ColumnMode.SINGLE, "Single Column  (data only)"),
-            (ColumnMode.DOUBLE, "Double Column  (time + data)"),
-        ]):
-            rb = ttk.Radiobutton(
-                self,
-                text=label,
-                variable=self.column_mode,
-                value=val,
-                command=self._on_mode_change,
-            )
-            rb.grid(row=index+1,
-                    column=0,
-                    sticky=(tk.W))
-
-    def _on_mode_change(self):
-        self.event_generate(Events.COLUMN_FORMAT_UPDATED)
+    def set(self, mode: ColumnMode):
+        descriptions = {
+            ColumnMode.SINGLE: "1 column: component data",
+            ColumnMode.DOUBLE: "2 columns: time + 1 component",
+            ColumnMode.THREE_COMPONENT: "4 columns: time + 3 components",
+        }
+        self.column_mode.set(mode)
+        self.description.set(descriptions[mode])
 
     def get(self):
         return self.column_mode.get()
@@ -104,13 +100,16 @@ class SingleColumnParams(tk.LabelFrame):
     def get(self):
         return self.dt_var.get()
 
+    def set(self, time_increment: float):
+        self.dt_var.set(time_increment)
+
 
 class DoubleColumnParams(tk.LabelFrame):
     """Parameters for Double Column Format"""
 
     def __init__(self, parent, *args, **kwargs):
         """Double Column Params Initializer"""
-        super().__init__(parent, text="Double Column Params", *args, **kwargs)
+        super().__init__(parent, text="Component Options", *args, **kwargs)
 
         self.factor_var = tk.StringVar(value="")
 
@@ -268,7 +267,15 @@ class FileSelector(tk.LabelFrame):
                          column=0)
 
     def _load_file(self):
-        signal_data = filedialog.askopenfile(title="Select signal data file", filetypes=[("CSV", "*.csv")])
+        signal_data = filedialog.askopenfile(
+            title="Select signal data file",
+            filetypes=[
+                ("Signal data", "*.csv *.txt"),
+                ("CSV", "*.csv"),
+                ("Text", "*.txt"),
+                ("All files", "*.*"),
+            ],
+        )
 
         if signal_data:
             self.data_file = signal_data
@@ -292,6 +299,29 @@ class Statistics(tk.LabelFrame):
                                highlightthickness=0,
                                )
         self.textbox.grid(row=0, column=0)
+
+    def set_file_info(
+        self,
+        metadata: dict[str, str | float],
+        *,
+        sample_count: int,
+        component_count: int,
+    ):
+        lines = [
+            f"Samples: {sample_count}",
+            f"Components: {component_count}",
+        ]
+        lines.extend(
+            f"{key.replace('_', ' ')}: {value:g}"
+            if isinstance(value, float)
+            else f"{key.replace('_', ' ')}: {value}"
+            for key, value in metadata.items()
+        )
+
+        self.textbox.config(state=tk.NORMAL)
+        self.textbox.delete("1.0", tk.END)
+        self.textbox.insert("1.0", "\n".join(lines))
+        self.textbox.config(state=tk.DISABLED)
     
 
 class ControlPanel(tk.Frame):
@@ -302,60 +332,75 @@ class ControlPanel(tk.Frame):
 
         self.control_variables = {}
 
-        self.column_format = ColumnFormatRadioButton(self)
-        self.column_format.grid(row=1, column=0, sticky=(tk.W + tk.E))
-        self.column_format.bind(Events.COLUMN_FORMAT_UPDATED, self._column_format_updated)
+        # File Selector
+        self.file_selector = FileSelector(self)
+        self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
+        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
+
+        self.column_format = ColumnFormatDisplay(self)
+        self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
 
         self.single_col_options = SingleColumnParams(self)
-        self.single_col_options.grid(row=2,
+        self.single_col_options.grid(row=3,
                                      column=0, sticky=(tk.W + tk.E))
+        self.single_col_options.grid_remove()
         self.single_col_options.bind(
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
 
         # Double Column Params
         self.double_col_params = DoubleColumnParams(self)
-        self.double_col_params.grid(row=3, column=0, sticky=(tk.W + tk.E))
+        self.double_col_params.grid(row=4, column=0, sticky=(tk.W + tk.E))
         self.double_col_params.grid_remove()
         self.double_col_params.bind(
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
         
-        # File Selector
-        self.file_selector = FileSelector(self)
-        self.file_selector.grid(row=4, column=0, sticky=(tk.W + tk.E))
-        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
-
         self.filtering = Filtering(self)
         self.filtering.grid(row=5, column=0, sticky=(tk.W + tk.E))
         self.filtering.bind(Events.FILTER_PARAMS_UPDATED, self._emit_values_change)
 
-        self.statitics = Statistics(self, {})
-        self.statitics.grid(row=6, column=0, sticky=(tk.W + tk.E))
+        self.statistics = Statistics(self, {})
+        self.statistics.grid(row=6, column=0, sticky=(tk.W + tk.E))
 
 
     def _emit_values_change(self, *_):
         self.event_generate(Events.VARIABLES_UPDATED)
 
     def _file_selected(self, *_):
-        self.control_variables["signal_data_file"] = self.file_selector.get_file()
+        data_file = self.file_selector.get_file()
+        try:
+            data = read_signal_data(data_file)
+            mode = detect_column_mode(data)
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as error:
+            messagebox.showerror("Unsupported signal file", str(error))
+            return
+
+        metadata = data.attrs.get("metadata", {})
+        if mode == ColumnMode.SINGLE:
+            sampling_rate = metadata.get("Sampling_rate")
+            if isinstance(sampling_rate, (int, float)) and sampling_rate > 0:
+                self.single_col_options.set(1.0 / sampling_rate)
+
+        component_count = 3 if mode == ColumnMode.THREE_COMPONENT else 1
+        self.statistics.set_file_info(
+            metadata,
+            sample_count=len(data),
+            component_count=component_count,
+        )
+        self.control_variables["signal_data_file"] = data_file
+        self.column_format.set(mode)
+        self._show_options_for_mode(mode)
         self._emit_values_change()
         self.event_generate(Events.FILE_SELECTED)
 
-    def _column_format_updated(self, *_):
-        column_mode = self.column_format.get()
-        self.control_variables["column_format"] = column_mode
-
+    def _show_options_for_mode(self, column_mode: ColumnMode):
         if column_mode == ColumnMode.SINGLE:
             self.double_col_params.grid_remove()
             self.single_col_options.grid()
-            self.control_variables["time_increment"] = self.single_col_options.get()
         else:
             self.single_col_options.grid_remove()
             self.double_col_params.grid()
-            self.control_variables["scale_factor"] = self.double_col_params.get()
-
-        self._emit_values_change()
 
     def get(self):
         control_variables = {
@@ -444,19 +489,33 @@ class PlotArea(tk.Frame):
         filter_params=None,
         scale_factor=1.0,
     ):
-        """Plot the given data"""
+        """Plot one or three signal components in time and frequency domains."""
         logger.info(f"Plotting {len(motion_data)} data points")
 
-        motion_data = pd.to_numeric(motion_data, errors="coerce")
-        if time_data is None:
-            motion_data = motion_data.dropna().to_numpy()
+        if isinstance(motion_data, pd.DataFrame):
+            component_data = motion_data.apply(pd.to_numeric, errors="coerce")
         else:
-            time_data = pd.to_numeric(time_data, errors="coerce")
-            valid = motion_data.notna() & time_data.notna()
-            motion_data = motion_data[valid].to_numpy()
-            time_data = time_data[valid].to_numpy()
+            component_name = getattr(motion_data, "name", None) or "Component"
+            component_data = pd.DataFrame(
+                {component_name: pd.to_numeric(motion_data, errors="coerce")}
+            )
+        component_data = component_data.reset_index(drop=True)
 
-            time_steps = np.diff(time_data)
+        if time_data is None:
+            component_data = component_data.dropna()
+            time_values = None
+        else:
+            time_values = pd.Series(
+                pd.to_numeric(time_data, errors="coerce")
+            ).reset_index(drop=True)
+            if len(time_values) != len(component_data):
+                raise ValueError("Time and component columns must have equal lengths.")
+
+            valid = time_values.notna() & component_data.notna().all(axis=1)
+            component_data = component_data.loc[valid]
+            time_values = time_values.loc[valid].to_numpy(dtype=float)
+
+            time_steps = np.diff(time_values)
             if len(time_steps) == 0 or np.any(time_steps <= 0):
                 raise ValueError("Time values must be strictly increasing.")
             time_increment = float(np.median(time_steps))
@@ -466,73 +525,103 @@ class PlotArea(tk.Frame):
         if time_increment <= 0:
             raise ValueError("Time increment must be greater than zero.")
 
-        motion_data = motion_data * scale_factor
+        values = component_data.to_numpy(dtype=float) * scale_factor
+        if len(values) < 2:
+            raise ValueError("At least two valid signal samples are required.")
 
         if filter_params is not None:
-            motion_data = filter_signal(
-                motion_data,
-                filter_params,
-                sampling_rate=1.0 / time_increment,
-            )
+            for column_index in range(values.shape[1]):
+                values[:, column_index] = filter_signal(
+                    values[:, column_index],
+                    filter_params,
+                    sampling_rate=1.0 / time_increment,
+                )
 
-        self.ax_time.cla()
-        self.ax_time.set_facecolor(Palette.PANEL)
-        self.ax_time.tick_params(colors=Palette.SUBTEXT, labelsize=8)
-        for sp in self.ax_time.spines.values():
-            sp.set_edgecolor(Palette.BORDER)
-
-        if time_data is None:
+        if time_values is None:
             logger.info("Calculating time series")
-            t0 = 0.0
-            time_data = np.array([t0 + i * time_increment for i in range(len(motion_data))])
+            time_values = np.arange(len(values), dtype=float) * time_increment
             logger.info("Time series calcution completed")
 
-        self.ax_time.plot(time_data, motion_data,
-                          color=Palette.ACCENT2,
-                          linewidth=0.9,
-                          alpha=0.9)
-        self.ax_time.fill_between(time_data, motion_data, alpha=0.15, color=Palette.ACCENT2)
-        self.ax_time.axhline(0, color=Palette.BORDER, linewidth=0.7, linestyle="--")
+        component_count = values.shape[1]
+        if component_count not in {1, 3}:
+            raise ValueError("Plotting supports either one or three components.")
 
-        self.ax_time.set_title(
-            "Time vs Ground Motion",
+        self.fig.clear()
+        if component_count == 1:
+            axes = self.fig.subplots(2, 1, squeeze=False)
+            time_axes = [axes[0, 0]]
+            fourier_axes = [axes[1, 0]]
+        else:
+            axes = self.fig.subplots(3, 2, squeeze=False, sharex="col")
+            time_axes = list(axes[:, 0])
+            fourier_axes = list(axes[:, 1])
+
+        self.ax_time = time_axes[0]
+        self.ax_fourier = fourier_axes[0]
+        colours = (Palette.ACCENT2, Palette.ACCENT, Palette.SUCCESS)
+        sample_count = len(values)
+        frequencies = np.fft.rfftfreq(sample_count, d=time_increment)
+
+        for index, component_name in enumerate(component_data.columns):
+            signal = values[:, index]
+            colour = colours[index]
+            time_axis = time_axes[index]
+            fourier_axis = fourier_axes[index]
+
+            time_axis.plot(
+                time_values, signal, color=colour, linewidth=0.9, alpha=0.9
+            )
+            time_axis.fill_between(time_values, signal, alpha=0.12, color=colour)
+            time_axis.axhline(
+                0, color=Palette.BORDER, linewidth=0.7, linestyle="--"
+            )
+
+            fft_values = np.abs(np.fft.rfft(signal)) / sample_count
+            fourier_axis.plot(
+                frequencies, fft_values, color=colour, linewidth=0.9
+            )
+            fourier_axis.fill_between(
+                frequencies, fft_values, alpha=0.16, color=colour
+            )
+
+            if component_count == 1:
+                time_title = f"{component_name}: Time vs Ground Motion"
+                fourier_title = f"{component_name}: Fourier Spectrum"
+            else:
+                time_title = f"{component_name}: Time History"
+                fourier_title = f"{component_name}: Fourier Spectrum"
+
+            self._style_axis(time_axis, time_title, "Time (s)", "Amplitude")
+            self._style_axis(
+                fourier_axis, fourier_title, "Frequency (Hz)", "Amplitude"
+            )
+
+            if component_count == 3 and index < component_count - 1:
+                time_axis.set_xlabel("")
+                fourier_axis.set_xlabel("")
+
+        self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=2.0, w_pad=2.0)
+        logger.debug("Drawing the canvas")
+        self.canvas.draw_idle()
+
+    def _style_axis(self, axis: Axes, title: str, xlabel: str, ylabel: str):
+        axis.set_facecolor(Palette.PANEL)
+        for spine in axis.spines.values():
+            spine.set_edgecolor(Palette.BORDER)
+        axis.tick_params(colors=Palette.SUBTEXT, labelsize=8)
+        axis.grid(
+            True,
+            color=Palette.BORDER,
+            linewidth=0.5,
+            linestyle="--",
+            alpha=0.6,
+        )
+        axis.set_title(
+            title,
             color=Palette.TEXT,
             fontsize=10,
             fontfamily="monospace",
             pad=8,
         )
-        self.ax_time.set_xlabel("Time (s)", color=Palette.SUBTEXT, fontsize=8)
-        self.ax_time.set_ylabel("Amplitude", color=Palette.SUBTEXT, fontsize=8)
-        self.ax_time.grid(True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6)
-        logger.debug("Title labels and grid done")
-        
-        # self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=3.0)
-        logger.debug("Drawing the canvas")
-
-        # ── Fourier spectrum
-        self.ax_fourier.cla()
-        self.ax_fourier.set_facecolor(Palette.PANEL)
-        self.ax_fourier.tick_params(colors=Palette.SUBTEXT, labelsize=8)
-        for sp in self.ax_fourier.spines.values():
-            sp.set_edgecolor(Palette.BORDER)
-
-        n = len(motion_data)
-        fft_vals = np.abs(np.fft.rfft(motion_data)) / n
-        freqs = np.fft.rfftfreq(n, d=time_increment)
-
-        self.ax_fourier.plot(freqs, fft_vals, color=Palette.ACCENT, linewidth=0.9)
-        self.ax_fourier.fill_between(freqs, fft_vals, alpha=0.2, color=Palette.ACCENT)
-
-        self.ax_fourier.set_title(
-            "Fourier Spectrum", color=Palette.TEXT, fontsize=10, fontfamily="monospace", pad=8
-        )
-        self.ax_fourier.set_xlabel("Frequency (Hz)", color=Palette.SUBTEXT, fontsize=8)
-        self.ax_fourier.set_ylabel("Amplitude", color=Palette.SUBTEXT, fontsize=8)
-        self.ax_fourier.grid(
-            True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6
-        )
-
-        self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=3.0)
-
-
-        self.canvas.draw_idle()
+        axis.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
+        axis.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)

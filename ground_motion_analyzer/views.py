@@ -1,9 +1,9 @@
 from loguru import logger
-import pandas as pd
 import tkinter as tk
 
 from . import widgets as w
 from .constants import ColumnMode, Events, Palette
+from .data_loading import read_signal_data
 
 
 class MainView(tk.Frame):
@@ -39,18 +39,21 @@ class MainView(tk.Frame):
         logger.info(f"control variables: {control_variables}")
 
         if data_file := control_variables.get("file"):
-            data_file.seek(0)
-            data = pd.read_csv(data_file)
+            data = read_signal_data(data_file)
             columns = data.columns
             logger.info(f"Columns: {columns}")
 
-            if control_variables["column_format"] == ColumnMode.SINGLE:
+            column_mode = control_variables["column_format"]
+            if column_mode == ColumnMode.SINGLE:
                 motion_data = data[columns[0]]
                 time_data = None
                 scale_factor = 1.0
             else:
                 time_data = data[columns[0]]
-                motion_data = data[columns[1]]
+                if column_mode == ColumnMode.THREE_COMPONENT:
+                    motion_data = data.iloc[:, 1:4]
+                else:
+                    motion_data = data[columns[1]]
                 scale_factor_text = control_variables["scale_factor"].strip()
                 try:
                     scale_factor = float(scale_factor_text or 1.0)
