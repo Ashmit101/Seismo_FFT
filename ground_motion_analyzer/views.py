@@ -1,5 +1,8 @@
-from loguru import logger
+from pathlib import Path
 import tkinter as tk
+from tkinter import filedialog, messagebox
+
+from loguru import logger
 
 from . import widgets as w
 from .constants import ColumnMode, Events, Palette
@@ -16,11 +19,19 @@ class MainView(tk.Frame):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        w.Header(
+        self.header = w.Header(
             self,
             title="Ground Motion Analyzer",
-            developer="Ashmit Rajaure"
-        ).grid(row=0, column=0, columnspan=2, sticky=(tk.N + tk.E + tk.W + tk.S), pady=(0, 12))
+            developer="Ashmit Rajaure",
+            download_command=self._download_fourier_data,
+        )
+        self.header.grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=(tk.N + tk.E + tk.W + tk.S),
+            pady=(0, 12),
+        )
         self.control_panel = w.ControlPanel(self, bg=Palette.BG)
         self.control_panel.grid(row=1, column=0, sticky=(tk.N + tk.S + tk.W))
         self.control_panel.bind(Events.VARIABLES_UPDATED, self._plot)
@@ -31,6 +42,7 @@ class MainView(tk.Frame):
 
         
     def _plot(self, *_):
+        self.header.set_download_enabled(False)
         try:
             control_variables = self.control_panel.get()
         except tk.TclError:
@@ -67,7 +79,55 @@ class MainView(tk.Frame):
                 filter_params=control_variables["filter"],
                 scale_factor=scale_factor,
             )
+            self.header.set_download_enabled(True)
         else:
             logger.info("No data file provided")
-        
-        
+
+    def _download_fourier_data(self):
+        fourier_data = self.plot_area.get_fourier_data()
+        if fourier_data is None:
+            messagebox.showwarning(
+                "No Fourier data",
+                "Load a valid signal file before downloading Fourier data.",
+                parent=self,
+            )
+            return
+
+        data_file = self.control_panel.file_selector.get_file()
+        source_name = getattr(data_file, "name", "signal")
+        initial_name = f"{Path(source_name).stem}_fourier_transform.csv"
+        output_path = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save Fourier transformed data",
+            initialfile=initial_name,
+            defaultextension=".csv",
+            filetypes=[
+                ("CSV file", "*.csv"),
+                ("Tab-delimited text", "*.tsv *.txt"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not output_path:
+            return
+
+        separator = (
+            "\t"
+            if Path(output_path).suffix.lower() in {".tsv", ".txt"}
+            else ","
+        )
+        try:
+            fourier_data.to_csv(output_path, index=False, sep=separator)
+        except (OSError, PermissionError) as error:
+            logger.exception("Could not save Fourier data")
+            messagebox.showerror(
+                "Save failed",
+                f"Could not save the Fourier data:\n{error}",
+                parent=self,
+            )
+            return
+
+        messagebox.showinfo(
+            "Fourier data saved",
+            f"Saved to:\n{output_path}",
+            parent=self,
+        )
