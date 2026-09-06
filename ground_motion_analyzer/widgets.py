@@ -1,6 +1,6 @@
 from loguru import logger
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, simpledialog
 from tkinter import messagebox
 import matplotlib
 import pandas as pd
@@ -281,6 +281,7 @@ class FileSelector(tk.LabelFrame):
         super().__init__(parent, text="File", *args, **kwargs)
 
         self.data_file = None
+        self.data_unit = ""
         tk.Button(self,
                   text="Select File",
                   command=self._load_file,
@@ -299,11 +300,38 @@ class FileSelector(tk.LabelFrame):
         )
 
         if signal_data:
+            data_unit = simpledialog.askstring(
+                "Signal data unit",
+                "Enter the unit of the signal data\n"
+                "(for example: g, m/s², or cm/s²):",
+                parent=self,
+            )
+            if data_unit is None:
+                signal_data.close()
+                return
+
+            data_unit = data_unit.strip()
+            if not data_unit:
+                messagebox.showwarning(
+                    "Data unit required",
+                    "Enter a unit before loading the signal data.",
+                    parent=self,
+                )
+                signal_data.close()
+                return
+
+            previous_file = self.data_file
             self.data_file = signal_data
+            self.data_unit = data_unit
+            if previous_file is not None:
+                previous_file.close()
             self.event_generate(Events.FILE_SELECTED)
       
     def get_file(self):
         return self.data_file
+
+    def get_unit(self):
+        return self.data_unit
 
 class Statistics(tk.LabelFrame):
     """Statistics of data"""
@@ -327,10 +355,12 @@ class Statistics(tk.LabelFrame):
         *,
         sample_count: int,
         component_count: int,
+        data_unit: str,
     ):
         lines = [
             f"Samples: {sample_count}",
             f"Components: {component_count}",
+            f"Data unit: {data_unit}",
         ]
         lines.extend(
             f"{key.replace('_', ' ')}: {value:g}"
@@ -408,6 +438,7 @@ class ControlPanel(tk.Frame):
             metadata,
             sample_count=len(data),
             component_count=component_count,
+            data_unit=self.file_selector.get_unit(),
         )
         self.control_variables["signal_data_file"] = data_file
         self.column_format.set(mode)
@@ -429,6 +460,7 @@ class ControlPanel(tk.Frame):
             "time_increment": self.single_col_options.get(),
             "scale_factor": self.double_col_params.get(),
             "file": self.file_selector.get_file(),
+            "data_unit": self.file_selector.get_unit(),
             "filter": self.filtering.get(),
             }
         return control_variables
@@ -510,6 +542,7 @@ class PlotArea(tk.Frame):
         time_increment=0.01,
         filter_params=None,
         scale_factor=1.0,
+        data_unit="",
     ):
         """Plot one or three signal components in time and frequency domains."""
         self._fourier_data = None
@@ -582,6 +615,9 @@ class PlotArea(tk.Frame):
         self.ax_time = time_axes[0]
         self.ax_fourier = fourier_axes[0]
         colours = (Palette.ACCENT2, Palette.ACCENT, Palette.SUCCESS)
+        amplitude_label = (
+            f"Amplitude ({data_unit})" if data_unit else "Amplitude"
+        )
         self._fourier_data = create_fourier_data(
             values,
             time_increment=time_increment,
@@ -618,9 +654,14 @@ class PlotArea(tk.Frame):
                 time_title = f"{component_name}: Time History"
                 fourier_title = f"{component_name}: Fourier Spectrum"
 
-            self._style_axis(time_axis, time_title, "Time (s)", "Amplitude")
             self._style_axis(
-                fourier_axis, fourier_title, "Frequency (Hz)", "Amplitude"
+                time_axis, time_title, "Time (s)", amplitude_label
+            )
+            self._style_axis(
+                fourier_axis,
+                fourier_title,
+                "Frequency (Hz)",
+                amplitude_label,
             )
 
             if component_count == 3 and index < component_count - 1:
