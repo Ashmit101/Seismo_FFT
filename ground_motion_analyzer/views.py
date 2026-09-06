@@ -78,6 +78,7 @@ class MainView(tk.Frame):
                 time_increment=control_variables["time_increment"],
                 filter_params=control_variables["filter"],
                 scale_factor=scale_factor,
+                data_unit=control_variables["data_unit"],
             )
             self.header.set_download_enabled(True)
         else:
