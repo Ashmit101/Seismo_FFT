@@ -5,9 +5,9 @@ fft_seismic.py  –  compute and save FFT results for V / E‑W / N‑S channels
 import argparse
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from scipy.signal import detrend, get_window
 
 
@@ -95,8 +95,7 @@ def main(argv=None):
     dt = np.diff(t).mean()
     if not np.allclose(np.diff(t), dt, rtol=1e-4):
         print(
-            "⚠️  Warning: time steps are not strictly uniform; "
-            "using mean dt={:.6f}s".format(dt)
+            f"⚠️  Warning: time steps are not strictly uniform; using mean dt={dt:.6f}s"
         )
 
     # ------------------------------------------------------------------

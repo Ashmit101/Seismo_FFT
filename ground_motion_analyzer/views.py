@@ -1,18 +1,19 @@
-from pathlib import Path
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.simpledialog import Dialog
 
+import pandas as pd
 from loguru import logger
 
 from . import widgets as w
 from .constants import ColumnMode, Events, Palette
-from .data_loading import read_signal_data
+from .data_loading import detect_column_mode, read_signal_data
 
 
 class MainView(tk.Frame):
     """Main view of the application"""
-    
+
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
@@ -33,15 +34,13 @@ class MainView(tk.Frame):
             sticky=(tk.N + tk.E + tk.W + tk.S),
             pady=(0, 12),
         )
-        self.control_panel = w.ControlPanel(self, bg=Palette.BG)
+        self.control_panel = ControlPanel(self, bg=Palette.BG)
         self.control_panel.grid(row=1, column=0, sticky=(tk.N + tk.S + tk.W))
         self.control_panel.bind(Events.VARIABLES_UPDATED, self._plot)
 
-        
         self.plot_area = w.PlotArea(self)
         self.plot_area.grid(row=1, column=1, sticky=(tk.N + tk.S + tk.E + tk.W))
 
-        
     def _plot(self, *_):
         self.header.set_download_enabled(False)
         try:
@@ -80,6 +79,8 @@ class MainView(tk.Frame):
                 filter_params=control_variables["filter"],
                 scale_factor=scale_factor,
                 data_unit=control_variables["data_unit"],
+                demean=control_variables["demean"],
+                detrend=control_variables["detrend"],
             )
             self.header.set_download_enabled(True)
         else:
@@ -113,9 +114,7 @@ class MainView(tk.Frame):
             return
 
         separator = (
-            "\t"
-            if Path(output_path).suffix.lower() in {".tsv", ".txt"}
-            else ","
+            "\t" if Path(output_path).suffix.lower() in {".tsv", ".txt"} else ","
         )
         try:
             fourier_data.to_csv(output_path, index=False, sep=separator)
@@ -173,3 +172,100 @@ class DataTypeDialog(Dialog):
 
     def apply(self):
         self.result = self.unit.get()
+
+
+class ControlPanel(tk.Frame):
+    """Control panel"""
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+
+        self.control_variables = {}
+
+        # File Selector
+        self.file_selector = w.FileSelector(self)
+        self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
+        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
+
+        self.column_format = w.ColumnFormatDisplay(self)
+        self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
+
+        self.single_col_options = w.SingleColumnParams(self)
+        self.single_col_options.grid(row=3, column=0, sticky=(tk.W + tk.E))
+        self.single_col_options.grid_remove()
+        self.single_col_options.bind(
+            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
+        )
+
+        # Double Column Params
+        self.double_col_params = w.DoubleColumnParams(self)
+        self.double_col_params.grid(row=4, column=0, sticky=(tk.W + tk.E))
+        self.double_col_params.grid_remove()
+        self.double_col_params.bind(
+            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
+        )
+
+        # Detrend and Demean
+        self.demean_detrend_options = w.Demean(self)
+        self.demean_detrend_options.grid(row=5, sticky=(tk.W + tk.E))
+        self.demean_detrend_options.bind(
+            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
+        )
+
+        self.filtering = w.Filtering(self)
+        self.filtering.grid(row=6, column=0, sticky=(tk.W + tk.E))
+        self.filtering.bind(Events.FILTER_PARAMS_UPDATED, self._emit_values_change)
+
+        self.statistics = w.Statistics(self, {})
+        self.statistics.grid(row=7, column=0, sticky=(tk.W + tk.E))
+
+    def _emit_values_change(self, *_):
+        self.event_generate(Events.VARIABLES_UPDATED)
+
+    def _file_selected(self, *_):
+        data_file = self.file_selector.get_file()
+        try:
+            data = read_signal_data(data_file)
+            mode = detect_column_mode(data)
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as error:
+            messagebox.showerror("Unsupported signal file", str(error))
+            return
+
+        metadata = data.attrs.get("metadata", {})
+        if mode == ColumnMode.SINGLE:
+            sampling_rate = metadata.get("Sampling_rate")
+            if isinstance(sampling_rate, (int, float)) and sampling_rate > 0:
+                self.single_col_options.set(1.0 / sampling_rate)
+
+        component_count = 3 if mode == ColumnMode.THREE_COMPONENT else 1
+        self.statistics.set_file_info(
+            metadata,
+            sample_count=len(data),
+            component_count=component_count,
+            data_unit=self.file_selector.get_unit(),
+        )
+        self.control_variables["signal_data_file"] = data_file
+        self.column_format.set(mode)
+        self._show_options_for_mode(mode)
+        self._emit_values_change()
+        self.event_generate(Events.FILE_SELECTED)
+
+    def _show_options_for_mode(self, column_mode: ColumnMode):
+        if column_mode == ColumnMode.SINGLE:
+            self.double_col_params.grid_remove()
+            self.single_col_options.grid()
+        else:
+            self.single_col_options.grid_remove()
+            self.double_col_params.grid()
+
+    def get(self):
+        control_variables = {
+            "column_format": self.column_format.get(),
+            "time_increment": self.single_col_options.get(),
+            "scale_factor": self.double_col_params.get(),
+            "file": self.file_selector.get_file(),
+            "data_unit": self.file_selector.get_unit(),
+            "filter": self.filtering.get(),
+            **self.demean_detrend_options.get(),
+        }
+        return control_variables

@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 from scipy.signal import butter, sosfiltfilt
 
-
 FILTER_TYPES = {"lowpass", "highpass", "bandpass", "bandstop"}
 
 
