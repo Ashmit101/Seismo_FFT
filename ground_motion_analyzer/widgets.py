@@ -6,6 +6,8 @@ import matplotlib
 import pandas as pd
 import numpy as np
 
+
+
 matplotlib.use("TkAgg")
 matplotlib.rcParams["path.simplify"] = True
 matplotlib.rcParams["path.simplify_threshold"] = 1.0
@@ -300,23 +302,11 @@ class FileSelector(tk.LabelFrame):
         )
 
         if signal_data:
-            data_unit = simpledialog.askstring(
-                "Signal data unit",
-                "Enter the unit of the signal data\n"
-                "(for example: g, m/s², or cm/s²):",
-                parent=self,
-            )
-            if data_unit is None:
-                signal_data.close()
-                return
+            from ground_motion_analyzer.views import DataTypeDialog
 
-            data_unit = data_unit.strip()
-            if not data_unit:
-                messagebox.showwarning(
-                    "Data unit required",
-                    "Enter a unit before loading the signal data.",
-                    parent=self,
-                )
+            data_type_dialog = DataTypeDialog(self, title="Data type")
+            data_unit = data_type_dialog.result
+            if data_unit is None:
                 signal_data.close()
                 return
 

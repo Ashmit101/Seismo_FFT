@@ -1,6 +1,7 @@
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
+from tkinter.simpledialog import Dialog
 
 from loguru import logger
 
@@ -132,3 +133,43 @@ class MainView(tk.Frame):
             f"Saved to:\n{output_path}",
             parent=self,
         )
+
+
+class DataTypeDialog(Dialog):
+    """A dialog that asks for data type and unit."""
+
+    def __init__(self, parent, title):
+        self.data_types = {
+            "Acceleration": ["m/s²", "cm/s²", "g"],
+            "Velocity": ["m/s", "cm/s"],
+        }
+        self.data_type = tk.StringVar(value=next(iter(self.data_types)))
+        self.unit = tk.StringVar(value=self.data_types[self.data_type.get()][0])
+        super().__init__(parent, title=title)
+
+    def body(self, frame):
+        ttk.Label(frame, text="Provide unit for signal").grid(row=0)
+
+        type_combo = ttk.Combobox(
+            frame,
+            textvariable=self.data_type,
+            values=list(self.data_types),
+        )
+        type_combo.grid()
+        type_combo.bind("<<ComboboxSelected>>", self._on_type_change)
+
+        self.unit_combo = ttk.Combobox(
+            frame,
+            textvariable=self.unit,
+            values=self.data_types[self.data_type.get()],
+        )
+        self.unit_combo.grid()
+        return type_combo
+
+    def _on_type_change(self, _event=None):
+        units = self.data_types[self.data_type.get()]
+        self.unit_combo["values"] = units
+        self.unit.set(units[0])
+
+    def apply(self):
+        self.result = self.unit.get()
