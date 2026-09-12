@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from os import PathLike
 import re
+from os import PathLike
 from typing import IO
 
 import pandas as pd
@@ -13,53 +13,49 @@ from .constants import ColumnMode
 
 def read_signal_data(source: str | PathLike[str] | IO[str]) -> pd.DataFrame:
     """Read signal samples while preserving any metadata preamble."""
-    should_close = False
     if isinstance(source, (str, PathLike)):
-        stream = open(source, encoding="utf-8")
-        should_close = True
-    else:
-        stream = source
+        with open(source, encoding="utf-8") as stream:
+            return _read_signal_stream(stream)
 
     try:
-        stream.seek(0)
-        lines = stream.readlines()
-        numeric_row_index, column_count = _find_first_numeric_row(lines)
-
-        header_index = numeric_row_index
-        has_header = False
-        previous_index = _previous_nonempty_line(lines, numeric_row_index)
-        if previous_index is not None:
-            candidate_separator = _detect_separator(lines[previous_index])
-            candidate_fields = _split_fields(lines[previous_index], candidate_separator)
-            if len(candidate_fields) == column_count and not _all_numeric(
-                candidate_fields
-            ):
-                header_index = previous_index
-                has_header = True
-
-        reference_line = lines[header_index]
-        separator = _detect_separator(reference_line)
-        metadata = _parse_metadata(lines[:header_index])
-
-        engine = "python" if separator == r"\s+" else "c"
-        stream.seek(0)
-        data = pd.read_csv(
-            stream,
-            sep=separator,
-            engine=engine,
-            skiprows=header_index,
-            header=0 if has_header else None,
-        )
-        if not has_header:
-            data.columns = [f"Component {index + 1}" for index in range(column_count)]
-        data.attrs["metadata"] = metadata
-        data.attrs["header_row"] = header_index + 1 if has_header else None
-        return data
+        return _read_signal_stream(source)
     finally:
-        if should_close:
-            stream.close()
-        else:
-            stream.seek(0)
+        source.seek(0)
+
+
+def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
+    stream.seek(0)
+    lines = stream.readlines()
+    numeric_row_index, column_count = _find_first_numeric_row(lines)
+
+    header_index = numeric_row_index
+    has_header = False
+    previous_index = _previous_nonempty_line(lines, numeric_row_index)
+    if previous_index is not None:
+        candidate_separator = _detect_separator(lines[previous_index])
+        candidate_fields = _split_fields(lines[previous_index], candidate_separator)
+        if len(candidate_fields) == column_count and not _all_numeric(candidate_fields):
+            header_index = previous_index
+            has_header = True
+
+    reference_line = lines[header_index]
+    separator = _detect_separator(reference_line)
+    metadata = _parse_metadata(lines[:header_index])
+
+    engine = "python" if separator == r"\s+" else "c"
+    stream.seek(0)
+    data = pd.read_csv(
+        stream,
+        sep=separator,
+        engine=engine,
+        skiprows=header_index,
+        header=0 if has_header else None,
+    )
+    if not has_header:
+        data.columns = [f"Component {index + 1}" for index in range(column_count)]
+    data.attrs["metadata"] = metadata
+    data.attrs["header_row"] = header_index + 1 if has_header else None
+    return data
 
 
 def _find_first_numeric_row(lines: list[str]) -> tuple[int, int]:

@@ -1,27 +1,25 @@
-from loguru import logger
 import tkinter as tk
-from tkinter import ttk, filedialog, simpledialog
-from tkinter import messagebox
+from tkinter import filedialog, ttk
+from typing import ClassVar
+
 import matplotlib
-import pandas as pd
 import numpy as np
-
-
+import pandas as pd
+from loguru import logger
 
 matplotlib.use("TkAgg")
 matplotlib.rcParams["path.simplify"] = True
 matplotlib.rcParams["path.simplify_threshold"] = 1.0
 matplotlib.rcParams["agg.path.chunksize"] = 10000
 
-from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from .constants import ColumnMode, Palette, Events
-from .data_loading import detect_column_mode, read_signal_data
+from .constants import ColumnMode, Events, Palette
 from .filtering import filter_signal
-from .models import create_fourier_data
+from .models import create_fourier_data, preprocess_signal
 
 
 class Header(tk.Frame):
@@ -37,7 +35,7 @@ class Header(tk.Frame):
             bg=Palette.BG,
             fg=Palette.ACCENT2,
             font=("Consolas", 32, "bold"),
-            ).grid(row=0, column=0)
+        ).grid(row=0, column=0)
 
         tk.Label(
             self,
@@ -45,7 +43,7 @@ class Header(tk.Frame):
             bg=Palette.BG,
             fg=Palette.ACCENT2,
             font=("Consolas", 18, "bold"),
-            ).grid(row=1, column=0)
+        ).grid(row=1, column=0)
 
         self.download_button = tk.Button(
             self,
@@ -66,13 +64,13 @@ class Header(tk.Frame):
     def set_download_enabled(self, enabled: bool):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.download_button.configure(state=state)
-        
+
 
 class ColumnFormatDisplay(tk.LabelFrame):
     """Display the column layout detected from the selected file."""
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, text="Detected Format", *args, **kwargs)
+        super().__init__(parent, *args, text="Detected Format", **kwargs)
 
         self.column_mode = tk.StringVar(value=ColumnMode.SINGLE)
         self.description = tk.StringVar(value="Select a file to detect its format")
@@ -91,18 +89,17 @@ class ColumnFormatDisplay(tk.LabelFrame):
 
     def get(self):
         return self.column_mode.get()
-    
-        
-class SingleColumnParams(tk.LabelFrame):
 
+
+class SingleColumnParams(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, text="Single Column Options", *args, **kwargs)
+        super().__init__(parent, *args, text="Single Column Options", **kwargs)
 
         tk.Label(
             self,
             text="Time Increment (dt)  [s]",
         ).grid(row=1, column=0)
-        
+
         self.dt_var = tk.DoubleVar(value=0.01)
         self.dt_entry = tk.Spinbox(
             self,
@@ -132,16 +129,12 @@ class DoubleColumnParams(tk.LabelFrame):
 
     def __init__(self, parent, *args, **kwargs):
         """Double Column Params Initializer"""
-        super().__init__(parent, text="Component Options", *args, **kwargs)
+        super().__init__(parent, *args, text="Component Options", **kwargs)
 
         self.factor_var = tk.StringVar(value="")
 
-        tk.Label(self,
-                 text="Scale Factor (leave blank = 1.0)"
-                 ).grid(row=1, column=0)
-        tk.Entry(self,
-                 textvariable=self.factor_var
-                 ).grid(row=2, column=0)
+        tk.Label(self, text="Scale Factor (leave blank = 1.0)").grid(row=1, column=0)
+        tk.Entry(self, textvariable=self.factor_var).grid(row=2, column=0)
         self.factor_var.trace_add("write", self._emit_change)
 
     def _emit_change(self, *_):
@@ -157,23 +150,30 @@ class DoubleColumnParams(tk.LabelFrame):
 class Filtering(tk.LabelFrame):
     """Parameters for filtering"""
 
-    filter_types = ["lowpass", "highpass", "bandpass", "bandstop"]
+    filter_types: ClassVar[tuple[str, ...]] = (
+        "lowpass",
+        "highpass",
+        "bandpass",
+        "bandstop",
+    )
 
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, text="Filtering", **kwargs)
 
         self.filter_on = tk.BooleanVar(value=False)
         self.filter_type = tk.StringVar(value=self.filter_types[0])
-        self.cutoff_frequency = tk.DoubleVar(value=10.0)   # used for lowpass/highpass, and as LOW cutoff for band*
-        self.cutoff_frequency_high = tk.DoubleVar(value=20.0)  # used as HIGH cutoff for bandpass/bandstop
+        self.cutoff_frequency = tk.DoubleVar(
+            value=10.0
+        )  # used for lowpass/highpass, and as LOW cutoff for band*
+        self.cutoff_frequency_high = tk.DoubleVar(
+            value=20.0
+        )  # used as HIGH cutoff for bandpass/bandstop
         self.filter_order = tk.IntVar(value=4)
 
         # --- Enable filter ---
-        ttk.Checkbutton(
-            self,
-            variable=self.filter_on,
-            text="Filter"
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=4, pady=2)
+        ttk.Checkbutton(self, variable=self.filter_on, text="Filter").grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=4, pady=2
+        )
 
         # --- Filter type ---
         ttk.Label(self, text="Type:").grid(row=1, column=0, sticky="w", padx=4)
@@ -182,7 +182,7 @@ class Filtering(tk.LabelFrame):
             textvariable=self.filter_type,
             values=self.filter_types,
             state="readonly",
-            width=10
+            width=10,
         )
         self.filter_type_combo.grid(row=1, column=1, padx=4, pady=2)
         self.filter_type_combo.bind("<<ComboboxSelected>>", self._on_type_change)
@@ -196,7 +196,7 @@ class Filtering(tk.LabelFrame):
             from_=0.01,
             to=100.0,
             increment=0.1,
-            width=10
+            width=10,
         )
         self.cutoff_spin.grid(row=2, column=1, padx=4, pady=2)
 
@@ -208,19 +208,14 @@ class Filtering(tk.LabelFrame):
             from_=0.01,
             to=100.0,
             increment=0.1,
-            width=10
+            width=10,
         )
         # gridded/hidden dynamically in _on_type_change
 
         # --- Filter order ---
         ttk.Label(self, text="Order:").grid(row=4, column=0, sticky="w", padx=4)
         ttk.Spinbox(
-            self,
-            textvariable=self.filter_order,
-            from_=1,
-            to=10,
-            increment=1,
-            width=10
+            self, textvariable=self.filter_order, from_=1, to=10, increment=1, width=10
         ).grid(row=4, column=1, padx=4, pady=2)
 
         self._on_type_change()  # set initial visibility state
@@ -242,7 +237,7 @@ class Filtering(tk.LabelFrame):
             self.event_generate(Events.FILTER_PARAMS_UPDATED, when="tail")
             logger.info("Filter params updated")
         except tk.TclError:
-            pass                # widget destroyed or not ready yet
+            pass  # widget destroyed or not ready yet
 
     def _on_type_change(self, event=None):
         """Show/hide the high-cutoff field depending on filter type."""
@@ -280,15 +275,15 @@ class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, text="File", *args, **kwargs)
+        super().__init__(parent, *args, text="File", **kwargs)
 
         self.data_file = None
         self.data_unit = ""
-        tk.Button(self,
-                  text="Select File",
-                  command=self._load_file,
-                  ).grid(row=0,
-                         column=0)
+        tk.Button(
+            self,
+            text="Select File",
+            command=self._load_file,
+        ).grid(row=0, column=0)
 
     def _load_file(self):
         signal_data = filedialog.askopenfile(
@@ -316,27 +311,30 @@ class FileSelector(tk.LabelFrame):
             if previous_file is not None:
                 previous_file.close()
             self.event_generate(Events.FILE_SELECTED)
-      
+
     def get_file(self):
         return self.data_file
 
     def get_unit(self):
         return self.data_unit
 
+
 class Statistics(tk.LabelFrame):
     """Statistics of data"""
+
     def __init__(self, parent, stats: dict, *args, **kwargs):
-        super().__init__(parent, text="Statistics", *args, **kwargs)
-        
-        self.textbox = tk.Text(self,
-                               bg=Palette.ENTRY_BG,
-                               fg=Palette.SUBTEXT,
-                               relief=tk.FLAT,
-                               width=30,
-                               height=7,
-                               state=tk.DISABLED,
-                               highlightthickness=0,
-                               )
+        super().__init__(parent, *args, text="Statistics", **kwargs)
+
+        self.textbox = tk.Text(
+            self,
+            bg=Palette.ENTRY_BG,
+            fg=Palette.SUBTEXT,
+            relief=tk.FLAT,
+            width=30,
+            height=7,
+            state=tk.DISABLED,
+            highlightthickness=0,
+        )
         self.textbox.grid(row=0, column=0)
 
     def set_file_info(
@@ -353,9 +351,11 @@ class Statistics(tk.LabelFrame):
             f"Data unit: {data_unit}",
         ]
         lines.extend(
-            f"{key.replace('_', ' ')}: {value:g}"
-            if isinstance(value, float)
-            else f"{key.replace('_', ' ')}: {value}"
+            (
+                f"{key.replace('_', ' ')}: {value:g}"
+                if isinstance(value, float)
+                else f"{key.replace('_', ' ')}: {value}"
+            )
             for key, value in metadata.items()
         )
 
@@ -363,98 +363,30 @@ class Statistics(tk.LabelFrame):
         self.textbox.delete("1.0", tk.END)
         self.textbox.insert("1.0", "\n".join(lines))
         self.textbox.config(state=tk.DISABLED)
-    
 
-class ControlPanel(tk.Frame):
-    """Control panel"""
+
+class Demean(tk.LabelFrame):
+    """Option to demean and detrend plots."""
 
     def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
+        super().__init__(parent, *args, text="Demean & Detrend", **kwargs)
 
-        self.control_variables = {}
+        self._demean = tk.BooleanVar(value=True)
+        self._detrend = tk.BooleanVar(value=False)
 
-        # File Selector
-        self.file_selector = FileSelector(self)
-        self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
-        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
+        tk.Checkbutton(
+            self, variable=self._demean, text="Demean", command=self._emit_change
+        ).grid(row=0)
+        tk.Checkbutton(
+            self, variable=self._detrend, text="Detrend", command=self._emit_change
+        ).grid(row=1)
 
-        self.column_format = ColumnFormatDisplay(self)
-        self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
-
-        self.single_col_options = SingleColumnParams(self)
-        self.single_col_options.grid(row=3,
-                                     column=0, sticky=(tk.W + tk.E))
-        self.single_col_options.grid_remove()
-        self.single_col_options.bind(
-            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
-        )
-
-        # Double Column Params
-        self.double_col_params = DoubleColumnParams(self)
-        self.double_col_params.grid(row=4, column=0, sticky=(tk.W + tk.E))
-        self.double_col_params.grid_remove()
-        self.double_col_params.bind(
-            Events.CONTROL_VALUE_UPDATED, self._emit_values_change
-        )
-        
-        self.filtering = Filtering(self)
-        self.filtering.grid(row=5, column=0, sticky=(tk.W + tk.E))
-        self.filtering.bind(Events.FILTER_PARAMS_UPDATED, self._emit_values_change)
-
-        self.statistics = Statistics(self, {})
-        self.statistics.grid(row=6, column=0, sticky=(tk.W + tk.E))
-
-
-    def _emit_values_change(self, *_):
-        self.event_generate(Events.VARIABLES_UPDATED)
-
-    def _file_selected(self, *_):
-        data_file = self.file_selector.get_file()
-        try:
-            data = read_signal_data(data_file)
-            mode = detect_column_mode(data)
-        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as error:
-            messagebox.showerror("Unsupported signal file", str(error))
-            return
-
-        metadata = data.attrs.get("metadata", {})
-        if mode == ColumnMode.SINGLE:
-            sampling_rate = metadata.get("Sampling_rate")
-            if isinstance(sampling_rate, (int, float)) and sampling_rate > 0:
-                self.single_col_options.set(1.0 / sampling_rate)
-
-        component_count = 3 if mode == ColumnMode.THREE_COMPONENT else 1
-        self.statistics.set_file_info(
-            metadata,
-            sample_count=len(data),
-            component_count=component_count,
-            data_unit=self.file_selector.get_unit(),
-        )
-        self.control_variables["signal_data_file"] = data_file
-        self.column_format.set(mode)
-        self._show_options_for_mode(mode)
-        self._emit_values_change()
-        self.event_generate(Events.FILE_SELECTED)
-
-    def _show_options_for_mode(self, column_mode: ColumnMode):
-        if column_mode == ColumnMode.SINGLE:
-            self.double_col_params.grid_remove()
-            self.single_col_options.grid()
-        else:
-            self.single_col_options.grid_remove()
-            self.double_col_params.grid()
+    def _emit_change(self):
+        self.event_generate(Events.CONTROL_VALUE_UPDATED)
 
     def get(self):
-        control_variables = {
-            "column_format": self.column_format.get(),
-            "time_increment": self.single_col_options.get(),
-            "scale_factor": self.double_col_params.get(),
-            "file": self.file_selector.get_file(),
-            "data_unit": self.file_selector.get_unit(),
-            "filter": self.filtering.get(),
-            }
-        return control_variables
-        
+        return {"demean": self._demean.get(), "detrend": self._detrend.get()}
+
 
 class PlotArea(tk.Frame):
     """The plots of the signal data"""
@@ -464,26 +396,22 @@ class PlotArea(tk.Frame):
         self._fourier_data = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        
+
         plt.style.use("dark_background")
         self.fig = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
         self.fig.subplots_adjust(
             hspace=0.45, left=0.1, right=0.96, top=0.93, bottom=0.1
-            )
+        )
 
         self.ax_time = self.fig.add_subplot(211)
         self.ax_fourier = self.fig.add_subplot(212)
 
-        self._create_plot_area(self.ax_time,
-                               "Time vs Ground Motion",
-                               "Time (s)",
-                               "Amplitude"
-                               )
-        self._create_plot_area(self.ax_fourier,
-                               "Fourier Spectrum",
-                               "Frequency (Hz)",
-                               "Amplitude"
-                               )
+        self._create_plot_area(
+            self.ax_time, "Time vs Ground Motion", "Time (s)", "Amplitude"
+        )
+        self._create_plot_area(
+            self.ax_fourier, "Fourier Spectrum", "Frequency (Hz)", "Amplitude"
+        )
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.draw()
@@ -496,21 +424,18 @@ class PlotArea(tk.Frame):
         toolbar.config(bg=Palette.PANEL)
         toolbar.update()
 
-        
     def _create_plot_area(self, subplot: Axes, title: str, xlabel: str, ylabel: str):
         subplot.set_facecolor(Palette.PANEL)
         for spine in subplot.spines.values():
             spine.set_edgecolor(Palette.BORDER)
         subplot.tick_params(colors=Palette.SUBTEXT, labelsize=8)
-        subplot.grid(True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6)
+        subplot.grid(
+            True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6
+        )
 
         subplot.set_title(
-            title,
-            color=Palette.TEXT,
-            fontsize=10,
-            fontfamily="monospace",
-            pad=8
-            )
+            title, color=Palette.TEXT, fontsize=10, fontfamily="monospace", pad=8
+        )
         subplot.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
         subplot.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
         subplot.text(
@@ -522,7 +447,7 @@ class PlotArea(tk.Frame):
             color=Palette.BORDER,
             fontsize=12,
             fontfamily="monospace",
-            )
+        )
 
     def plot(
         self,
@@ -533,6 +458,8 @@ class PlotArea(tk.Frame):
         filter_params=None,
         scale_factor=1.0,
         data_unit="",
+        demean=True,
+        detrend=False,
     ):
         """Plot one or three signal components in time and frequency domains."""
         self._fourier_data = None
@@ -575,6 +502,8 @@ class PlotArea(tk.Frame):
         if len(values) < 2:
             raise ValueError("At least two valid signal samples are required.")
 
+        values = preprocess_signal(values, demean=demean, detrend=detrend)
+
         if filter_params is not None:
             for column_index in range(values.shape[1]):
                 values[:, column_index] = filter_signal(
@@ -605,9 +534,7 @@ class PlotArea(tk.Frame):
         self.ax_time = time_axes[0]
         self.ax_fourier = fourier_axes[0]
         colours = (Palette.ACCENT2, Palette.ACCENT, Palette.SUCCESS)
-        amplitude_label = (
-            f"Amplitude ({data_unit})" if data_unit else "Amplitude"
-        )
+        amplitude_label = f"Amplitude ({data_unit})" if data_unit else "Amplitude"
         self._fourier_data = create_fourier_data(
             values,
             time_increment=time_increment,
@@ -621,21 +548,13 @@ class PlotArea(tk.Frame):
             time_axis = time_axes[index]
             fourier_axis = fourier_axes[index]
 
-            time_axis.plot(
-                time_values, signal, color=colour, linewidth=0.9, alpha=0.9
-            )
+            time_axis.plot(time_values, signal, color=colour, linewidth=0.9, alpha=0.9)
             time_axis.fill_between(time_values, signal, alpha=0.12, color=colour)
-            time_axis.axhline(
-                0, color=Palette.BORDER, linewidth=0.7, linestyle="--"
-            )
+            time_axis.axhline(0, color=Palette.BORDER, linewidth=0.7, linestyle="--")
 
             fft_values = self._fourier_data.iloc[:, index + 1].to_numpy()
-            fourier_axis.plot(
-                frequencies, fft_values, color=colour, linewidth=0.9
-            )
-            fourier_axis.fill_between(
-                frequencies, fft_values, alpha=0.16, color=colour
-            )
+            fourier_axis.plot(frequencies, fft_values, color=colour, linewidth=0.9)
+            fourier_axis.fill_between(frequencies, fft_values, alpha=0.16, color=colour)
 
             if component_count == 1:
                 time_title = f"{component_name}: Time vs Ground Motion"
@@ -644,9 +563,7 @@ class PlotArea(tk.Frame):
                 time_title = f"{component_name}: Time History"
                 fourier_title = f"{component_name}: Fourier Spectrum"
 
-            self._style_axis(
-                time_axis, time_title, "Time (s)", amplitude_label
-            )
+            self._style_axis(time_axis, time_title, "Time (s)", amplitude_label)
             self._style_axis(
                 fourier_axis,
                 fourier_title,
