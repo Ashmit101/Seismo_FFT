@@ -3,6 +3,7 @@ from enum import StrEnum
 
 class Palette(StrEnum):
     """Colour Palette for the UI"""
+
     BG = "#F2EAE3"  # Linen – light warm background
     PANEL = "#EBDED1"  # Sandstone – slightly darker panel
     ACCENT = "#C07D58"  # Clay – warm terracotta accent
@@ -16,16 +17,17 @@ class Palette(StrEnum):
     WARNING = "#C4B195"  # Oat – soft warning tone
     BORDER = "#8D8961"  # Olive – subtle border
 
-    
+
 class Events(StrEnum):
     FILE_SELECTED = "<<FileSelected>>"
     VARIABLES_UPDATED = "<<VariablesUpdated>>"
     CONTROL_VALUE_UPDATED = "<<ControlValueUpdated>>"
     FILTER_PARAMS_UPDATED = "<<FilterParamsUpdated>>"
-    
+
+
 class ColumnMode(StrEnum):
     """The column format in the signal data file"""
+
     SINGLE = "single"
     DOUBLE = "double"
     THREE_COMPONENT = "three_component"
-    

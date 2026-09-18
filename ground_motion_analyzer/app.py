@@ -18,7 +18,6 @@ class Application(tk.Tk):
         self.main_view = MainView(self)
         self.main_view.grid(row=0, ipadx=10, ipady=10, sticky="nsew")
 
-
     def _configure_window(self):
         self.title("Ground Motion Analyzer")
         self.geometry("1280x800")
@@ -36,5 +35,5 @@ class Application(tk.Tk):
                     pass
 
             self.tk.call("tk", "scaling", max(scale, 1.25))
-        except Exception:
+        except tk.TclError:
             self.tk.call("tk", "scaling", 1.25)

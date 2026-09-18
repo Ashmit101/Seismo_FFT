@@ -6,15 +6,15 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import io
+
     import marimo as mo
     import numpy as np
     import pandas as pd
-    import io
-
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    from scipy.signal import detrend, get_window
     from scipy.fft import fft, fftfreq
+    from scipy.signal import detrend, get_window
 
     return detrend, fft, fftfreq, get_window, go, io, make_subplots, mo, np, pd
 
@@ -86,25 +86,21 @@ def _(df, mo):
 @app.cell
 def _(mo, time_column_selector):
     mo.md(text=f"Time Column: {time_column_selector}")
-    return
 
 
 @app.cell
 def _(mo, vertical_column_selector):
     mo.md(text=f"Vertical Column: {vertical_column_selector}")
-    return
 
 
 @app.cell
 def _(e_w_column_selector, mo):
     mo.md(text=f"East-West Column: {e_w_column_selector}")
-    return
 
 
 @app.cell
 def _(mo, n_s_column_selector):
     mo.md(text=f"North-South Column: {n_s_column_selector}")
-    return
 
 
 @app.cell
@@ -211,7 +207,6 @@ def _(
         signal_fig.update_yaxes(type="linear")
 
     signal_fig
-    return
 
 
 @app.cell
@@ -227,8 +222,6 @@ def _(get_window, np):
         amp = 2.0 * np.abs(spec)  # one‑sided amplitude
         freqs = np.fft.rfftfreq(n, d=dt)
         return freqs, spec, amp
-
-    return
 
 
 @app.cell(hide_code=True)
@@ -250,16 +243,13 @@ def _(np, pd):
             }
         )
 
-    return
-
 
 @app.cell
 def _(ew_data, fft, fftfreq, np, ns_data, time_data, v_data):
     dt = np.diff(time_data).mean()
     if not np.allclose(np.diff(time_data), dt, rtol=1e-4):
         print(
-            "⚠️  Warning: time steps are not strictly uniform; "
-            "using mean dt={:.6f}s".format(dt)
+            f"⚠️  Warning: time steps are not strictly uniform; using mean dt={dt:.6f}s"
         )
     N = len(time_data)
     frequency_data = fftfreq(N, dt)[: N // 2]
@@ -280,7 +270,6 @@ def _(ew_amp, frequency_data, ns_amp, time_data, v_amp):
     print(f"Vertical data: {len(v_amp)}")
     print(f"East-West data: {len(ew_amp)}")
     print(f"North-South data: {len(ns_amp)}")
-    return
 
 
 @app.cell
@@ -382,7 +371,6 @@ def _(
         fourier_fig.update_yaxes(type="linear")
 
     fourier_fig
-    return
 
 
 @app.cell
@@ -421,7 +409,6 @@ def _(frequency_data, go, hvsr, hvsr_type):
         figure.update_yaxes(type="linear")
 
     figure
-    return
 
 
 @app.cell
@@ -436,7 +423,6 @@ def _(fourier_df, io, mo):
         data=fourier_csv_bytes.getvalue(),
     )
     download_button
-    return
 
 
 if __name__ == "__main__":

@@ -6,6 +6,26 @@ from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
+from scipy.signal import detrend as scipy_detrend
+
+
+def preprocess_signal(
+    values: np.ndarray,
+    *,
+    demean: bool = True,
+    detrend: bool = False,
+) -> np.ndarray:
+    """Return signal values with the selected baseline corrections applied."""
+    processed = np.asarray(values, dtype=float).copy()
+    if processed.ndim not in {1, 2}:
+        raise ValueError("Signal data must be one- or two-dimensional.")
+
+    if demean:
+        processed -= np.mean(processed, axis=0)
+    if detrend:
+        processed = scipy_detrend(processed, axis=0, type="linear")
+
+    return processed
 
 
 def create_fourier_data(

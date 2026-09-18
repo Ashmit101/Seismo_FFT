@@ -1,8 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from scipy import signal
 from scipy.fft import fft, fftfreq
-import scipy.signal as signal
 
 
 def load_data(file_path: str):
@@ -33,8 +33,8 @@ def separate_directions(data, sampling_rate, x_orientation, z_orientation):
     z_signal = data["N-S"].values
 
     freq_y, fft_y = apply_fft(y_signal, sampling_rate)
-    freq_x, fft_x = apply_fft(x_signal, sampling_rate)
-    freq_z, fft_z = apply_fft(z_signal, sampling_rate)
+    freq_x, _fft_x = apply_fft(x_signal, sampling_rate)
+    freq_z, _fft_z = apply_fft(z_signal, sampling_rate)
 
     directions = {
         "vertical": {"signal": y_signal, "fft": fft_y, "freq": freq_y},
@@ -131,8 +131,8 @@ def main():
 
     try:
         data = load_data(file_path)
-    except Exception as e:
-        print(f"Error loading data from file: {e}")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"Error loading data from file: {error}")
         return
 
     directions, time = separate_directions(

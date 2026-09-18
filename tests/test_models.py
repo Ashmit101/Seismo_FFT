@@ -2,7 +2,33 @@ import unittest
 
 import numpy as np
 
-from ground_motion_analyzer.models import create_fourier_data
+from ground_motion_analyzer.models import create_fourier_data, preprocess_signal
+
+
+class PreprocessSignalTests(unittest.TestCase):
+    def test_demean_removes_each_component_mean(self):
+        values = np.array([[1.0, 10.0], [2.0, 20.0], [6.0, 30.0]])
+
+        result = preprocess_signal(values, demean=True, detrend=False)
+
+        np.testing.assert_allclose(result.mean(axis=0), [0.0, 0.0], atol=1e-12)
+        np.testing.assert_array_equal(values, [[1.0, 10.0], [2.0, 20.0], [6.0, 30.0]])
+
+    def test_detrend_removes_linear_trend(self):
+        samples = np.arange(8, dtype=float)
+        values = np.column_stack((2.0 * samples + 3.0, -samples + 5.0))
+
+        result = preprocess_signal(values, demean=False, detrend=True)
+
+        np.testing.assert_allclose(result, 0.0, atol=1e-12)
+
+    def test_disabled_options_leave_values_unchanged(self):
+        values = np.array([1.0, 3.0, 2.0])
+
+        result = preprocess_signal(values, demean=False, detrend=False)
+
+        np.testing.assert_array_equal(result, values)
+        self.assertIsNot(result, values)
 
 
 class CreateFourierDataTests(unittest.TestCase):
