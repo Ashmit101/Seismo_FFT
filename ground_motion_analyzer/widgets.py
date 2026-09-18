@@ -1,4 +1,5 @@
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, ttk
 from typing import ClassVar
 
@@ -43,7 +44,7 @@ class Header(tk.Frame):
             bg=Palette.BG,
             fg=Palette.ACCENT2,
             font=("Consolas", 18, "bold"),
-        ).grid(row=1, column=0)
+        ).grid(row=1, column=0, sticky=tk.E, padx=16)
 
         self.download_button = tk.Button(
             self,
@@ -279,11 +280,18 @@ class FileSelector(tk.LabelFrame):
 
         self.data_file = None
         self.data_unit = ""
+        self.selected_file_name = tk.StringVar(value="No file selected")
         tk.Button(
             self,
             text="Select File",
             command=self._load_file,
-        ).grid(row=0, column=0)
+        ).grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(
+            self,
+            textvariable=self.selected_file_name,
+            wraplength=220,
+            justify=tk.LEFT,
+        ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
     def _load_file(self):
         signal_data = filedialog.askopenfile(
@@ -308,6 +316,7 @@ class FileSelector(tk.LabelFrame):
             previous_file = self.data_file
             self.data_file = signal_data
             self.data_unit = data_unit
+            self.selected_file_name.set(Path(signal_data.name).name)
             if previous_file is not None:
                 previous_file.close()
             self.event_generate(Events.FILE_SELECTED)
@@ -406,9 +415,7 @@ class PlotArea(tk.Frame):
         self.ax_time = self.fig.add_subplot(211)
         self.ax_fourier = self.fig.add_subplot(212)
 
-        self._create_plot_area(
-            self.ax_time, "Time vs Ground Motion", "Time (s)", "Amplitude"
-        )
+        self._create_plot_area(self.ax_time, "Time History", "Time (s)", "Amplitude")
         self._create_plot_area(
             self.ax_fourier, "Fourier Spectrum", "Frequency (Hz)", "Amplitude"
         )
@@ -557,8 +564,8 @@ class PlotArea(tk.Frame):
             fourier_axis.fill_between(frequencies, fft_values, alpha=0.16, color=colour)
 
             if component_count == 1:
-                time_title = f"{component_name}: Time vs Ground Motion"
-                fourier_title = f"{component_name}: Fourier Spectrum"
+                time_title = "Time History"
+                fourier_title = "Fourier Spectrum"
             else:
                 time_title = f"{component_name}: Time History"
                 fourier_title = f"{component_name}: Fourier Spectrum"
