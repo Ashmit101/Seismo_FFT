@@ -24,7 +24,7 @@ class MainView(tk.Frame):
         self.header = w.Header(
             self,
             title="Ground Motion Analyzer",
-            developer="Ashmit Rajaure",
+            developer="By Ashmit Rajaure",
             download_command=self._download_fourier_data,
         )
         self.header.grid(
