@@ -16,6 +16,7 @@ class Palette(StrEnum):
     SUCCESS = "#5D573B"  # Moss – success state
     WARNING = "#C4B195"  # Oat – soft warning tone
     BORDER = "#8D8961"  # Olive – subtle border
+    PLOT_BG = "#FFFFFF"
 
 
 class Events(StrEnum):
