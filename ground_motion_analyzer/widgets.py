@@ -470,7 +470,6 @@ class PlotArea(tk.Frame):
     ):
         """Plot one or three signal components in time and frequency domains."""
         self._fourier_data = None
-        logger.info(f"Plotting {len(motion_data)} data points")
 
         if isinstance(motion_data, pd.DataFrame):
             component_data = motion_data.apply(pd.to_numeric, errors="coerce")
@@ -558,10 +557,12 @@ class PlotArea(tk.Frame):
             time_axis.plot(time_values, signal, color=colour, linewidth=0.9, alpha=0.9)
             time_axis.fill_between(time_values, signal, alpha=0.12, color=colour)
             time_axis.axhline(0, color=Palette.BORDER, linewidth=0.7, linestyle="--")
+            time_axis.margins(x=0)
 
             fft_values = self._fourier_data.iloc[:, index + 1].to_numpy()
             fourier_axis.plot(frequencies, fft_values, color=colour, linewidth=0.9)
             fourier_axis.fill_between(frequencies, fft_values, alpha=0.16, color=colour)
+            fourier_axis.margins(x=0)
 
             if component_count == 1:
                 time_title = "Time History"
@@ -583,7 +584,6 @@ class PlotArea(tk.Frame):
                 fourier_axis.set_xlabel("")
 
         self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=2.0, w_pad=2.0)
-        logger.debug("Drawing the canvas")
         self.canvas.draw_idle()
 
     def get_fourier_data(self):
@@ -593,7 +593,7 @@ class PlotArea(tk.Frame):
         return self._fourier_data.copy()
 
     def _style_axis(self, axis: Axes, title: str, xlabel: str, ylabel: str):
-        axis.set_facecolor(Palette.PANEL)
+        axis.set_facecolor(Palette.PLOT_BG)
         for spine in axis.spines.values():
             spine.set_edgecolor(Palette.BORDER)
         axis.tick_params(colors=Palette.SUBTEXT, labelsize=8)
