@@ -613,3 +613,4 @@ class PlotArea(tk.Frame):
         )
         axis.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
         axis.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
+        axis.tick_params(axis="both", which="major", labelsize=10)
