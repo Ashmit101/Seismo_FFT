@@ -42,7 +42,7 @@ class Header(tk.Frame):
             self,
             text=developer,
             bg=Palette.BG,
-            fg=Palette.ACCENT2,
+            fg=Palette.SUBTEXT,
             font=("Consolas", 18, "bold"),
         ).grid(row=1, column=0, sticky=tk.E, padx=16)
 
