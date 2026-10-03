@@ -42,7 +42,7 @@ class Header(tk.Frame):
             self,
             text=developer,
             bg=Palette.BG,
-            fg=Palette.ACCENT2,
+            fg=Palette.SUBTEXT,
             font=("Consolas", 18, "bold"),
         ).grid(row=1, column=0, sticky=tk.E, padx=16)
 
@@ -613,3 +613,4 @@ class PlotArea(tk.Frame):
         )
         axis.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
         axis.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
+        axis.tick_params(axis="both", which="major", labelsize=10)
