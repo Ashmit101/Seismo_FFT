@@ -2,21 +2,21 @@ from enum import StrEnum
 
 
 class Palette(StrEnum):
-    """Black-and-white colour palette for the UI."""
+    """Grayscale colour palette for the UI."""
 
-    BG = "#FFFFFF"
-    PANEL = "#FFFFFF"
-    ACCENT = "#000000"
-    ACCENT2 = "#000000"
-    TEXT = "#000000"
-    SUBTEXT = "#000000"
-    ENTRY_BG = "#FFFFFF"
-    BTN_BG = "#FFFFFF"
-    BTN_HOV = "#000000"
-    SUCCESS = "#000000"
-    WARNING = "#FFFFFF"
-    BORDER = "#000000"
-    PLOT_BG = "#FFFFFF"
+    BG = "#E5E5E5"
+    PANEL = "#F2F2F2"
+    ACCENT = "#404040"
+    ACCENT2 = "#262626"
+    TEXT = "#202020"
+    SUBTEXT = "#505050"
+    ENTRY_BG = "#FAFAFA"
+    BTN_BG = "#D0D0D0"
+    BTN_HOV = "#606060"
+    SUCCESS = "#484848"
+    WARNING = "#B0B0B0"
+    BORDER = "#888888"
+    PLOT_BG = "#F5F5F5"
 
 
 class Events(StrEnum):
