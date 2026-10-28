@@ -78,7 +78,7 @@ jobs:
             --onefile \
             --clean \
             --name ground_motion_analyzer \
-            gma.py
+            ground_motion_analyzer/__main__.py
 
       - name: Stage artifact (Unix)
         if: matrix.platform != 'windows'
