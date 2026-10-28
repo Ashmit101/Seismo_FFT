@@ -9,6 +9,35 @@ permissions:
   contents: write
 
 jobs:
+  package:
+    name: Building python package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+      	uses: actions/checkout@v4
+
+      - name: Install uv
+      	uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.23"
+
+      - name: Set up Python 3.11
+        run: uv python install
+
+      - name: Build project
+        run: uv build
+
+      - name: Upload artifact
+        uses: actions/upload-artiface@v4
+	with:
+	  name: ground_motion_analyzer
+	  path: |
+	    dist/*.whl
+	    dist/*.tar.gz
+	  retention-days: 1
+
+
   build:
     name: Build — ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -72,18 +101,14 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: staging/${{ matrix.artifact }}
-          retention-days: 1     # short-lived; the Release is the permanent home
+          retention-days: 1
 
-  # ════════════════════════════════════════════
-  #  JOB 2 — Collect artifacts & publish Release
-  # ════════════════════════════════════════════
   release:
     name: Publish GitHub Release
-    needs: build             # only runs after all three builds succeed
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Pull all three executables into one flat directory ────────────
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
         with:
@@ -115,9 +140,9 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | 🐧 Linux  | `ground_motion_analyzer-linux` |
-            | 🪟 Windows | `ground_motion_analyzer-windows.exe` |
-            | 🍎 macOS  | `ground_motion_analyzer-macos` |
+            | Linux  | `ground_motion_analyzer-linux` |
+            | Windows | `ground_motion_analyzer-windows.exe` |
+            | macOS  | `ground_motion_analyzer-macos` |
 
             ---
 
