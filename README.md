@@ -70,10 +70,19 @@ Results are shown as matplotlib figures and optionally written to `directional_c
 | `main.py` | Script: load data, directional FFT analysis, matplotlib plots |
 | `plot_signal.py`, `plot_fft.py` | Plotting helpers |
 
-## Dependencies
 
-Key libraries: **marimo**, **obspy**, **numpy**, **pandas**, **scipy**, **matplotlib**, **plotly**. See `pyproject.toml` for full list.
+# Graphical User Interface
 
-## License
+The application is named "Ground Motion Analyzer" and its source code is inside `ground_motion_analyzer`. The GUI is built entirely with [Tkinter](https://docs.python.org/3/library/tkinter.html).
 
-See repository settings or a `LICENSE` file in the repo.
+In order to build the application, run the following command:
+
+```bash
+uv build
+```
+
+To just run the application:
+
+```bash
+uv run ground_motion_analyzer
+```

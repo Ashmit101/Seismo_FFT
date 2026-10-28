@@ -2,21 +2,21 @@ from enum import StrEnum
 
 
 class Palette(StrEnum):
-    """Colour Palette for the UI"""
+    """Grayscale colour palette for the UI."""
 
-    BG = "#F2EAE3"  # Linen – light warm background
-    PANEL = "#EBDED1"  # Sandstone – slightly darker panel
-    ACCENT = "#C07D58"  # Clay – warm terracotta accent
-    ACCENT2 = "#8A4E35"  # Sage-complementary warm rust
-    TEXT = "#3B2A1A"  # Deep espresso-brown text
-    SUBTEXT = "#734F3A"  # Chestnut – muted subtext
-    ENTRY_BG = "#D8C3A6"  # Warm Beige – input field background
-    BTN_BG = "#B56B46"  # Terracotta – primary button
-    BTN_HOV = "#994D2C"  # Burnt Sienna – button hover
-    SUCCESS = "#5D573B"  # Moss – success state
-    WARNING = "#C4B195"  # Oat – soft warning tone
-    BORDER = "#8D8961"  # Olive – subtle border
-    PLOT_BG = "#FFFFFF"
+    BG = "#E5E5E5"
+    PANEL = "#F2F2F2"
+    ACCENT = "#404040"
+    ACCENT2 = "#262626"
+    TEXT = "#202020"
+    SUBTEXT = "#505050"
+    ENTRY_BG = "#FAFAFA"
+    BTN_BG = "#D0D0D0"
+    BTN_HOV = "#606060"
+    SUCCESS = "#484848"
+    WARNING = "#B0B0B0"
+    BORDER = "#888888"
+    PLOT_BG = "#F5F5F5"
 
 
 class Events(StrEnum):
