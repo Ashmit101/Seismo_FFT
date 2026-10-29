@@ -185,7 +185,7 @@ class ControlPanel(tk.Frame):
         # File Selector
         self.file_selector = w.FileSelector(self)
         self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
-        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
+        self.file_selector.bind(Events.FILE_SELECTED, self._emit_values_change)
 
         self.column_format = w.ColumnFormatDisplay(self)
         self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
@@ -220,35 +220,8 @@ class ControlPanel(tk.Frame):
         self.statistics.grid(row=7, column=0, sticky=(tk.W + tk.E))
 
     def _emit_values_change(self, *_):
+        logger.info("Variables updated!")
         self.event_generate(Events.VARIABLES_UPDATED)
-
-    def _file_selected(self, *_):
-        data_file = self.file_selector.get_file()
-        try:
-            data = read_signal_data(data_file)
-            mode = detect_column_mode(data)
-        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as error:
-            messagebox.showerror("Unsupported signal file", str(error))
-            return
-
-        metadata = data.attrs.get("metadata", {})
-        if mode == ColumnMode.SINGLE:
-            sampling_rate = metadata.get("Sampling_rate")
-            if isinstance(sampling_rate, (int, float)) and sampling_rate > 0:
-                self.single_col_options.set(1.0 / sampling_rate)
-
-        component_count = 3 if mode == ColumnMode.THREE_COMPONENT else 1
-        self.statistics.set_file_info(
-            metadata,
-            sample_count=len(data),
-            component_count=component_count,
-            data_unit=self.file_selector.get_unit(),
-        )
-        self.control_variables["signal_data_file"] = data_file
-        self.column_format.set(mode)
-        self._show_options_for_mode(mode)
-        self._emit_values_change()
-        self.event_generate(Events.FILE_SELECTED)
 
     def _show_options_for_mode(self, column_mode: ColumnMode):
         if column_mode == ColumnMode.SINGLE:
