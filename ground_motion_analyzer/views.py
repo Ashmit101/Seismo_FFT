@@ -181,11 +181,12 @@ class ControlPanel(tk.Frame):
         super().__init__(parent, *args, **kwargs)
 
         self.control_variables = {}
+        self.data = None
 
         # File Selector
         self.file_selector = w.FileSelector(self)
         self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
-        self.file_selector.bind(Events.FILE_SELECTED, self._emit_values_change)
+        self.file_selector.bind(Events.FILE_SELECTED, self._handle_new_file)
 
         self.column_format = w.ColumnFormatDisplay(self)
         self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
@@ -219,6 +220,16 @@ class ControlPanel(tk.Frame):
         self.statistics = w.Statistics(self, {})
         self.statistics.grid(row=7, column=0, sticky=(tk.W + tk.E))
 
+
+    def _handle_new_file(self, *_):
+        new_file = self.file_selector.get_file()
+        if not new_file:
+            logger.warning("No new file selected")
+            return
+        self.data = read_signal_data(new_file)
+        self.column_format.set(detect_column_mode(self.data))
+        self._emit_values_change()
+        
     def _emit_values_change(self, *_):
         logger.info("Variables updated!")
         self.event_generate(Events.VARIABLES_UPDATED)
