@@ -43,15 +43,9 @@ class MainView(tk.Frame):
 
     def _plot(self, *_):
         self.header.set_download_enabled(False)
-        try:
-            control_variables = self.control_panel.get()
-        except tk.TclError:
-            # A numeric field can be briefly incomplete while the user types.
-            return
-        logger.info(f"control variables: {control_variables}")
-
-        if data_file := control_variables.get("file"):
-            data = read_signal_data(data_file)
+        control_variables = self.control_panel.get()
+        data = control_variables.get("data")
+        if data is not None:
             columns = data.columns
             logger.info(f"Columns: {columns}")
 
@@ -181,11 +175,12 @@ class ControlPanel(tk.Frame):
         super().__init__(parent, *args, **kwargs)
 
         self.control_variables = {}
+        self.data = None
 
         # File Selector
         self.file_selector = w.FileSelector(self)
         self.file_selector.grid(row=1, column=0, sticky=(tk.W + tk.E))
-        self.file_selector.bind(Events.FILE_SELECTED, self._file_selected)
+        self.file_selector.bind(Events.FILE_SELECTED, self._handle_new_file)
 
         self.column_format = w.ColumnFormatDisplay(self)
         self.column_format.grid(row=2, column=0, sticky=(tk.W + tk.E))
@@ -219,36 +214,19 @@ class ControlPanel(tk.Frame):
         self.statistics = w.Statistics(self, {})
         self.statistics.grid(row=7, column=0, sticky=(tk.W + tk.E))
 
-    def _emit_values_change(self, *_):
-        self.event_generate(Events.VARIABLES_UPDATED)
 
-    def _file_selected(self, *_):
-        data_file = self.file_selector.get_file()
-        try:
-            data = read_signal_data(data_file)
-            mode = detect_column_mode(data)
-        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as error:
-            messagebox.showerror("Unsupported signal file", str(error))
+    def _handle_new_file(self, *_):
+        new_file = self.file_selector.get_file()
+        if not new_file:
+            logger.warning("No new file selected")
             return
-
-        metadata = data.attrs.get("metadata", {})
-        if mode == ColumnMode.SINGLE:
-            sampling_rate = metadata.get("Sampling_rate")
-            if isinstance(sampling_rate, (int, float)) and sampling_rate > 0:
-                self.single_col_options.set(1.0 / sampling_rate)
-
-        component_count = 3 if mode == ColumnMode.THREE_COMPONENT else 1
-        self.statistics.set_file_info(
-            metadata,
-            sample_count=len(data),
-            component_count=component_count,
-            data_unit=self.file_selector.get_unit(),
-        )
-        self.control_variables["signal_data_file"] = data_file
-        self.column_format.set(mode)
-        self._show_options_for_mode(mode)
+        self.data = read_signal_data(new_file)
+        self.column_format.set(detect_column_mode(self.data))
         self._emit_values_change()
-        self.event_generate(Events.FILE_SELECTED)
+        
+    def _emit_values_change(self, *_):
+        logger.info("Variables updated!")
+        self.event_generate(Events.VARIABLES_UPDATED)
 
     def _show_options_for_mode(self, column_mode: ColumnMode):
         if column_mode == ColumnMode.SINGLE:
@@ -266,6 +244,7 @@ class ControlPanel(tk.Frame):
             "file": self.file_selector.get_file(),
             "data_unit": self.file_selector.get_unit(),
             "filter": self.filtering.get(),
+            "data": self.data,
             **self.demean_detrend_options.get(),
         }
         return control_variables
