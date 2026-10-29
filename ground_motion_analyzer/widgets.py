@@ -294,31 +294,25 @@ class FileSelector(tk.LabelFrame):
         ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
     def _load_file(self):
-        signal_data = filedialog.askopenfile(
+        signal_filepath = filedialog.askopenfilename(
             title="Select signal data file",
             filetypes=[
                 ("Signal data", "*.csv *.txt"),
                 ("CSV", "*.csv"),
                 ("Text", "*.txt"),
+                ("MSEED", "*.mseed"),
                 ("All files", "*.*"),
             ],
         )
 
-        if signal_data:
+        if signal_filepath:
             from ground_motion_analyzer.views import DataTypeDialog
 
             data_type_dialog = DataTypeDialog(self, title="Data type")
             data_unit = data_type_dialog.result
-            if data_unit is None:
-                signal_data.close()
-                return
-
-            previous_file = self.data_file
-            self.data_file = signal_data
+            self.data_file = signal_filepath
             self.data_unit = data_unit
-            self.selected_file_name.set(Path(signal_data.name).name)
-            if previous_file is not None:
-                previous_file.close()
+            self.selected_file_name.set(Path(signal_filepath).name)
             self.event_generate(Events.FILE_SELECTED)
 
     def get_file(self):
