@@ -43,15 +43,9 @@ class MainView(tk.Frame):
 
     def _plot(self, *_):
         self.header.set_download_enabled(False)
-        try:
-            control_variables = self.control_panel.get()
-        except tk.TclError:
-            # A numeric field can be briefly incomplete while the user types.
-            return
-        logger.info(f"control variables: {control_variables}")
-
-        if data_file := control_variables.get("file"):
-            data = read_signal_data(data_file)
+        control_variables = self.control_panel.get()
+        data = control_variables.get("data")
+        if data is not None:
             columns = data.columns
             logger.info(f"Columns: {columns}")
 
@@ -250,6 +244,7 @@ class ControlPanel(tk.Frame):
             "file": self.file_selector.get_file(),
             "data_unit": self.file_selector.get_unit(),
             "filter": self.filtering.get(),
+            "data": self.data,
             **self.demean_detrend_options.get(),
         }
         return control_variables
