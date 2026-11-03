@@ -75,14 +75,32 @@ Results are shown as matplotlib figures and optionally written to `directional_c
 
 The application is named "Ground Motion Analyzer" and its source code is inside `ground_motion_analyzer`. The GUI is built entirely with [Tkinter](https://docs.python.org/3/library/tkinter.html).
 
-In order to build the application, run the following command:
+To run the GUI from source:
+
+```bash
+uv run python -m ground_motion_analyzer
+```
+
+To build a standalone executable for your current operating system:
+
+```bash
+uv run pyinstaller --clean --noconfirm ground_motion_analyzer.spec
+```
+
+Use the spec file so the executable includes ObsPy's reader plugins, dependency
+metadata, native libraries, and version-file handling. Building directly from
+`ground_motion_analyzer/__main__.py` bypasses these settings.
+
+Run the executable on macOS or Linux:
+
+```bash
+./dist/ground_motion_analyzer
+```
+
+On Windows, run `dist\ground_motion_analyzer.exe`.
+
+To build a Python wheel and source distribution instead:
 
 ```bash
 uv build
-```
-
-To just run the application:
-
-```bash
-uv run ground_motion_analyzer
 ```

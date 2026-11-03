@@ -69,7 +69,7 @@ def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
 def _read_mseed_file(source: str | PathLike[str]) -> pd.DataFrame | None:
     """Read signal samples from mseed file"""
     logger.info("Reading mseed file.")
-    streams = read(source)
+    streams = read(source, format="MSEED")
     streams.merge(method=1, fill_value=0)
 
     if len(streams) > 1:
