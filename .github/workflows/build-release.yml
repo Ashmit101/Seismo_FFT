@@ -93,12 +93,7 @@ jobs:
 
       - name: Build with PyInstaller
         shell: bash
-        run: |
-          uv run pyinstaller \
-            --onefile \
-            --clean \
-            --name ground_motion_analyzer \
-            ground_motion_analyzer/__main__.py
+        run: uv run pyinstaller --clean --noconfirm ground_motion_analyzer.spec
 
       - name: Stage artifact (Unix)
         if: matrix.platform != 'windows'
