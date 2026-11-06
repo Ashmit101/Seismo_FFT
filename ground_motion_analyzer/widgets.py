@@ -124,6 +124,31 @@ class SingleColumnParams(tk.LabelFrame):
     def set(self, time_increment: float):
         self.dt_var.set(time_increment)
 
+class ScalingFactor(tk.LabelFrame):
+    """Scaling factor for the data"""
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, text="Scaling Factor", **kwargs)
+        self.scaling_factor = tk.DoubleVar(value=1.0)
+
+        tk.Label(self,
+                 text="Scaling factor: "
+                 ).grid(row=0, column=0)
+        ttk.Spinbox(self,
+                    from_=0.1,
+                    to=100.0,
+                    increment=0.01,
+                    textvariable=self.scaling_factor,
+                    ).grid(row=0, column=1)
+
+        self.scaling_factor.trace_add("write", self._on_data_change)
+
+    def get(self):
+        return self.scaling_factor.get()
+
+    def _on_data_change(self, *_):
+        logger.info("Scaling factor updated")
+        self.event_generate(Events.CONTROL_VALUE_UPDATED, when="tail")
 
 class DoubleColumnParams(tk.LabelFrame):
     """Parameters for Double Column Format"""
