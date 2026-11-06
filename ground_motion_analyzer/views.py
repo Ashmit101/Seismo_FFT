@@ -45,6 +45,7 @@ class MainView(tk.Frame):
         self.header.set_download_enabled(False)
         control_variables = self.control_panel.get()
         data = control_variables.get("data")
+        scale_factor = control_variables.get("scale_factor")
         if data is not None:
             columns = data.columns
             logger.info(f"Columns: {columns}")
@@ -53,18 +54,12 @@ class MainView(tk.Frame):
             if column_mode == ColumnMode.SINGLE:
                 motion_data = data[columns[0]]
                 time_data = None
-                scale_factor = 1.0
             else:
                 time_data = data[columns[0]]
                 if column_mode == ColumnMode.THREE_COMPONENT:
                     motion_data = data.iloc[:, 1:4]
                 else:
                     motion_data = data[columns[1]]
-                scale_factor_text = control_variables["scale_factor"].strip()
-                try:
-                    scale_factor = float(scale_factor_text or 1.0)
-                except ValueError:
-                    return
 
             self.plot_area.plot(
                 motion_data=motion_data,
@@ -192,9 +187,17 @@ class ControlPanel(tk.Frame):
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
 
+        # Scaling Factor
+        self.scaling_factor = w.ScalingFactor(self)
+        self.scaling_factor.grid(row=4, column=0, sticky=(tk.W + tk.E))
+        self.scaling_factor.bind(
+            Events.CONTROL_VALUE_UPDATED,
+            self._emit_values_change
+            )
+
         # Double Column Params
         self.double_col_params = w.DoubleColumnParams(self)
-        self.double_col_params.grid(row=4, column=0, sticky=(tk.W + tk.E))
+        self.double_col_params.grid(row=5, column=0, sticky=(tk.W + tk.E))
         self.double_col_params.grid_remove()
         self.double_col_params.bind(
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
@@ -202,17 +205,17 @@ class ControlPanel(tk.Frame):
 
         # Detrend and Demean
         self.demean_detrend_options = w.Demean(self)
-        self.demean_detrend_options.grid(row=5, sticky=(tk.W + tk.E))
+        self.demean_detrend_options.grid(row=6, sticky=(tk.W + tk.E))
         self.demean_detrend_options.bind(
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
 
         self.filtering = w.Filtering(self)
-        self.filtering.grid(row=6, column=0, sticky=(tk.W + tk.E))
+        self.filtering.grid(row=7, column=0, sticky=(tk.W + tk.E))
         self.filtering.bind(Events.FILTER_PARAMS_UPDATED, self._emit_values_change)
 
         self.statistics = w.Statistics(self, {})
-        self.statistics.grid(row=7, column=0, sticky=(tk.W + tk.E))
+        self.statistics.grid(row=8, column=0, sticky=(tk.W + tk.E))
 
 
     def _handle_new_file(self, *_):
@@ -240,7 +243,7 @@ class ControlPanel(tk.Frame):
         control_variables = {
             "column_format": self.column_format.get(),
             "time_increment": self.single_col_options.get(),
-            "scale_factor": self.double_col_params.get(),
+            "scale_factor": self.scaling_factor.get(),
             "file": self.file_selector.get_file(),
             "data_unit": self.file_selector.get_unit(),
             "filter": self.filtering.get(),
