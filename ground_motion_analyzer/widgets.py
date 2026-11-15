@@ -1,26 +1,17 @@
+from __future__ import annotations
+
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
-from typing import ClassVar
+from tkinter import filedialog, messagebox, ttk
+from typing import TYPE_CHECKING, ClassVar
 
-import matplotlib
-import numpy as np
-import pandas as pd
 from loguru import logger
 
-matplotlib.use("TkAgg")
-matplotlib.rcParams["path.simplify"] = True
-matplotlib.rcParams["path.simplify_threshold"] = 1.0
-matplotlib.rcParams["agg.path.chunksize"] = 10000
-
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
-
+from .background import BackgroundTask
 from .constants import ColumnMode, Events, Palette
-from .filtering import filter_signal
-from .models import create_fourier_data, preprocess_signal
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
 
 
 class Header(tk.Frame):
@@ -124,6 +115,7 @@ class SingleColumnParams(tk.LabelFrame):
     def set(self, time_increment: float):
         self.dt_var.set(time_increment)
 
+
 class ScalingFactor(tk.LabelFrame):
     """Scaling factor for the data"""
 
@@ -131,15 +123,14 @@ class ScalingFactor(tk.LabelFrame):
         super().__init__(parent, *args, text="Scaling Factor", **kwargs)
         self.scaling_factor = tk.DoubleVar(value=1.0)
 
-        tk.Label(self,
-                 text="Scaling factor: "
-                 ).grid(row=0, column=0)
-        ttk.Spinbox(self,
-                    from_=0.1,
-                    to=100.0,
-                    increment=0.01,
-                    textvariable=self.scaling_factor,
-                    ).grid(row=0, column=1)
+        tk.Label(self, text="Scaling factor: ").grid(row=0, column=0)
+        ttk.Spinbox(
+            self,
+            from_=0.1,
+            to=100.0,
+            increment=0.01,
+            textvariable=self.scaling_factor,
+        ).grid(row=0, column=1)
 
         self.scaling_factor.trace_add("write", self._on_data_change)
 
@@ -149,6 +140,7 @@ class ScalingFactor(tk.LabelFrame):
     def _on_data_change(self, *_):
         logger.info("Scaling factor updated")
         self.event_generate(Events.CONTROL_VALUE_UPDATED, when="tail")
+
 
 class DoubleColumnParams(tk.LabelFrame):
     """Parameters for Double Column Format"""
@@ -300,6 +292,16 @@ class Filtering(tk.LabelFrame):
 class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
 
+    # Retain the directory across selectors for the current application session.
+    _last_directory: ClassVar[Path | None] = None
+
+    @classmethod
+    def _initial_directory(cls):
+        if cls._last_directory is not None and cls._last_directory.is_dir():
+            return cls._last_directory
+        documents = Path.home() / "Documents"
+        return documents if documents.is_dir() else Path.cwd()
+
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, text="File", **kwargs)
 
@@ -319,10 +321,21 @@ class FileSelector(tk.LabelFrame):
         ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
     def _load_file(self):
+        # No dialog opens at startup. If called before mapping, let Tk paint first.
+        if not self.winfo_viewable():
+            self.winfo_toplevel().after(100, self._open_dialog)
+            return
+        self._open_dialog()
+
+    def _open_dialog(self):
+        if not self.winfo_exists():
+            return
         signal_filepath = filedialog.askopenfilename(
+            parent=self,
             title="Select signal data file",
+            initialdir=str(self._initial_directory()),
             filetypes=[
-                ("Signal data", "*.csv *.txt"),
+                ("Signal data", "*.csv *.txt *.tsv *.mseed"),
                 ("CSV", "*.csv"),
                 ("Text", "*.txt"),
                 ("MSEED", "*.mseed"),
@@ -331,10 +344,13 @@ class FileSelector(tk.LabelFrame):
         )
 
         if signal_filepath:
+            type(self)._last_directory = Path(signal_filepath).parent
             from ground_motion_analyzer.views import DataTypeDialog
 
             data_type_dialog = DataTypeDialog(self, title="Data type")
             data_unit = data_type_dialog.result
+            if data_unit is None:
+                return  # Cancelling the unit dialog must not replace the loaded file.
             self.data_file = signal_filepath
             self.data_unit = data_unit
             self.selected_file_name.set(Path(signal_filepath).name)
@@ -425,58 +441,77 @@ class PlotArea(tk.Frame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        plt.style.use("dark_background")
-        self.fig = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
-        self.fig.subplots_adjust(
-            hspace=0.45, left=0.1, right=0.96, top=0.93, bottom=0.1
+        self.canvas = None
+        self.fig = None
+        self.toolbar = None
+        self._on_ready = None
+        self.loading = ttk.Label(self, text="Load a file to begin")
+        self.loading.grid(row=0, column=0)
+        self._task = BackgroundTask(self, self._show_plot, self._plot_failed)
+
+    def _show_plot(self, result):
+        """Attach the completed, previously detached figure on the Tk thread."""
+        # The Tk backend is only imported when there is a first plot to display.
+        from matplotlib.backends.backend_tkagg import (
+            FigureCanvasTkAgg,
+            NavigationToolbar2Tk,
         )
 
-        self.ax_time = self.fig.add_subplot(211)
-        self.ax_fourier = self.fig.add_subplot(212)
+        figure, fourier_data = result
+        if self.canvas is None:
+            self.canvas = FigureCanvasTkAgg(figure, master=self)
+            self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+            self.toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
+            self.toolbar_frame.grid(row=1, column=0, sticky="sew")
+        else:
+            # Reuse the Tk canvas; no worker ever edits its live figure.
+            # Recreate the toolbar so pan/zoom callbacks bind to the new figure.
+            if self.canvas.widgetlock.isowner(self.toolbar):
+                self.canvas.widgetlock.release(self.toolbar)
+            self.toolbar.destroy()
+            self.fig.set_canvas(None)
+            self.canvas.figure = figure
+            figure.set_canvas(self.canvas)
+            width = self.canvas.get_tk_widget().winfo_width()
+            height = self.canvas.get_tk_widget().winfo_height()
+            if width > 1 and height > 1:
+                figure.set_size_inches(
+                    width / figure.dpi, height / figure.dpi, forward=False
+                )
+        self.fig = figure
+        self.ax_time, self.ax_fourier = figure.axes[:2]
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.toolbar_frame)
+        self.toolbar.config(bg=Palette.PANEL)
+        self.toolbar.update()
+        self._fourier_data = fourier_data
+        self.canvas.draw_idle()
+        self.loading.grid_remove()
+        if self._on_ready is not None:
+            self._on_ready()
 
-        self._create_plot_area(self.ax_time, "Time History", "Time (s)", "Amplitude")
-        self._create_plot_area(
-            self.ax_fourier, "Fourier Spectrum", "Frequency (Hz)", "Amplitude"
-        )
+    def _plot_failed(self, error):
+        self._fourier_data = None
+        self.loading.grid_remove()
+        messagebox.showerror("Plot failed", str(error), parent=self)
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas.draw()
-        widget = self.canvas.get_tk_widget()
-        widget.grid(row=0, column=0, sticky=(tk.N + tk.E + tk.S + tk.W))
+    def cancel_pending(self):
+        """Do not display/export an old plot while a replacement file loads."""
+        self._task.invalidate()
+        self._fourier_data = None
+        self._on_ready = None
+        self.loading.grid_remove()
 
-        toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
-        toolbar_frame.grid(row=1, column=0, sticky=(tk.S + tk.W + tk.E))
-        toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
-        toolbar.config(bg=Palette.PANEL)
-        toolbar.update()
+    def plot(self, motion_data, *, on_ready=None, **kwargs):
+        """Queue analysis; only this small entry point runs in the Tk handler."""
+        self._fourier_data = None
+        self._on_ready = on_ready
+        self.loading.configure(text="Loading...")
+        self.loading.grid()
+        self.loading.lift()
+        self._task.submit(self._prepare_plot, motion_data, **kwargs)
 
-    def _create_plot_area(self, subplot: Axes, title: str, xlabel: str, ylabel: str):
-        subplot.set_facecolor(Palette.PANEL)
-        for spine in subplot.spines.values():
-            spine.set_edgecolor(Palette.BORDER)
-        subplot.tick_params(colors=Palette.SUBTEXT, labelsize=8)
-        subplot.grid(
-            True, color=Palette.BORDER, linewidth=0.5, linestyle="--", alpha=0.6
-        )
-
-        subplot.set_title(
-            title, color=Palette.TEXT, fontsize=10, fontfamily="monospace", pad=8
-        )
-        subplot.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
-        subplot.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
-        subplot.text(
-            0.5,
-            0.5,
-            "Load a file to begin",
-            ha="center",
-            va="center",
-            color=Palette.BORDER,
-            fontsize=12,
-            fontfamily="monospace",
-        )
-
-    def plot(
-        self,
+    @staticmethod
+    def _prepare_plot(
         motion_data,
         *,
         time_data=None,
@@ -487,8 +522,15 @@ class PlotArea(tk.Frame):
         demean=True,
         detrend=False,
     ):
-        """Plot one or three signal components in time and frequency domains."""
-        self._fourier_data = None
+        """Build a detached figure and spectrum without accessing Tk/canvases."""
+        # Heavy imports happen on first analysis, in the worker, not at startup.
+        # Avoid pyplot and global style/backend mutations in background threads.
+        import numpy as np
+        import pandas as pd
+        from matplotlib.figure import Figure
+
+        from .filtering import filter_signal
+        from .models import create_fourier_data, preprocess_signal
 
         if isinstance(motion_data, pd.DataFrame):
             component_data = motion_data.apply(pd.to_numeric, errors="coerce")
@@ -546,26 +588,28 @@ class PlotArea(tk.Frame):
         if component_count not in {1, 3}:
             raise ValueError("Plotting supports either one or three components.")
 
-        self.fig.clear()
+        figure = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
+        # Fixed layout avoids tight_layout's renderer/canvas work in the worker.
+        figure.subplots_adjust(
+            left=0.10, right=0.96, bottom=0.10, top=0.93, hspace=0.60, wspace=0.35
+        )
         if component_count == 1:
-            axes = self.fig.subplots(2, 1, squeeze=False)
+            axes = figure.subplots(2, 1, squeeze=False)
             time_axes = [axes[0, 0]]
             fourier_axes = [axes[1, 0]]
         else:
-            axes = self.fig.subplots(3, 2, squeeze=False, sharex="col")
+            axes = figure.subplots(3, 2, squeeze=False, sharex="col")
             time_axes = list(axes[:, 0])
             fourier_axes = list(axes[:, 1])
 
-        self.ax_time = time_axes[0]
-        self.ax_fourier = fourier_axes[0]
         colours = (Palette.ACCENT2, Palette.ACCENT, Palette.SUCCESS)
         amplitude_label = f"Amplitude ({data_unit})" if data_unit else "Amplitude"
-        self._fourier_data = create_fourier_data(
+        fourier_data = create_fourier_data(
             values,
             time_increment=time_increment,
             component_names=component_data.columns,
         )
-        frequencies = self._fourier_data.iloc[:, 0].to_numpy()
+        frequencies = fourier_data.iloc[:, 0].to_numpy()
 
         for index, component_name in enumerate(component_data.columns):
             signal = values[:, index]
@@ -573,14 +617,22 @@ class PlotArea(tk.Frame):
             time_axis = time_axes[index]
             fourier_axis = fourier_axes[index]
 
-            time_axis.plot(time_values, signal, color=colour, linewidth=0.9, alpha=0.9)
-            time_axis.fill_between(time_values, signal, alpha=0.12, color=colour)
+            display_time, display_signal = PlotArea._display_data(time_values, signal)
+            time_axis.plot(
+                display_time, display_signal, color=colour, linewidth=0.9, alpha=0.9
+            )
+            time_axis.fill_between(
+                display_time, display_signal, alpha=0.12, color=colour, rasterized=True
+            )
             time_axis.axhline(0, color=Palette.BORDER, linewidth=0.7, linestyle="--")
             time_axis.margins(x=0)
 
-            fft_values = self._fourier_data.iloc[:, index + 1].to_numpy()
-            fourier_axis.plot(frequencies, fft_values, color=colour, linewidth=0.9)
-            fourier_axis.fill_between(frequencies, fft_values, alpha=0.16, color=colour)
+            fft_values = fourier_data.iloc[:, index + 1].to_numpy()
+            display_freq, display_fft = PlotArea._display_data(frequencies, fft_values)
+            fourier_axis.plot(display_freq, display_fft, color=colour, linewidth=0.9)
+            fourier_axis.fill_between(
+                display_freq, display_fft, alpha=0.16, color=colour, rasterized=True
+            )
             fourier_axis.margins(x=0)
 
             if component_count == 1:
@@ -590,8 +642,8 @@ class PlotArea(tk.Frame):
                 time_title = f"{component_name}: Time History"
                 fourier_title = f"{component_name}: Fourier Spectrum"
 
-            self._style_axis(time_axis, time_title, "Time (s)", amplitude_label)
-            self._style_axis(
+            PlotArea._style_axis(time_axis, time_title, "Time (s)", amplitude_label)
+            PlotArea._style_axis(
                 fourier_axis,
                 fourier_title,
                 "Frequency (Hz)",
@@ -602,8 +654,46 @@ class PlotArea(tk.Frame):
                 time_axis.set_xlabel("")
                 fourier_axis.set_xlabel("")
 
-        self.fig.tight_layout(rect=[0, 0, 1, 1], h_pad=2.0, w_pad=2.0)
-        self.canvas.draw_idle()
+        return figure, fourier_data
+
+    @staticmethod
+    def _display_data(x, y, max_points=4998):
+        """Bound fill polygons to <10k vertices, preserving per-bin extrema.
+
+        Only display data is reduced: FFT/export retain all samples and bins.
+        Min/max pairs preserve narrow peaks that a plain stride could miss.
+        Zooming shows this envelope, not every original sample.
+        """
+        import numpy as np
+
+        if len(y) <= max_points:
+            return x, y
+        bin_size = int(np.ceil(len(y) / ((max_points - 4) // 2)))
+        full_bins = len(y) // bin_size
+        bins = y[: full_bins * bin_size].reshape(full_bins, bin_size)
+        offsets = np.arange(full_bins) * bin_size
+        indices = np.concatenate(
+            (
+                [0],
+                offsets + bins.argmin(axis=1),
+                offsets + bins.argmax(axis=1),
+                [len(y) - 1],
+            )
+        )
+        # Include the partial last bin's extrema as well without exceeding cap.
+        if full_bins * bin_size < len(y):
+            remainder = y[full_bins * bin_size :]
+            indices = np.concatenate(
+                (
+                    indices,
+                    [
+                        full_bins * bin_size + remainder.argmin(),
+                        full_bins * bin_size + remainder.argmax(),
+                    ],
+                )
+            )
+        indices = np.unique(indices)
+        return x[indices], y[indices]
 
     def get_fourier_data(self):
         """Return a copy of the spectrum currently displayed, if available."""
@@ -611,7 +701,8 @@ class PlotArea(tk.Frame):
             return None
         return self._fourier_data.copy()
 
-    def _style_axis(self, axis: Axes, title: str, xlabel: str, ylabel: str):
+    @staticmethod
+    def _style_axis(axis: Axes, title: str, xlabel: str, ylabel: str):
         axis.set_facecolor(Palette.PLOT_BG)
         for spine in axis.spines.values():
             spine.set_edgecolor(Palette.BORDER)

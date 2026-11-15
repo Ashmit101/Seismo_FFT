@@ -65,6 +65,41 @@ class CreateFourierDataTests(unittest.TestCase):
             np.abs(np.fft.rfft(values, axis=0)) / len(values),
         )
 
+    def test_full_resolution_matches_numpy_for_odd_three_component_signal(self):
+        values = np.random.default_rng(42).normal(size=(1001, 3))
+        result = create_fourier_data(
+            values, time_increment=0.01, component_names=["X", "Y", "Z"]
+        )
+        np.testing.assert_allclose(
+            result.iloc[:, 1:],
+            np.abs(np.fft.rfft(values, axis=0)) / len(values),
+            atol=1e-14,
+        )
+        self.assertEqual(len(result), 501)
+
+    def test_preview_reduces_nyquist_and_suppresses_aliasing(self):
+        time = np.arange(10_000) * 0.001
+        values = np.sin(2 * np.pi * 10 * time) + np.sin(2 * np.pi * 190 * time)
+        result = create_fourier_data(
+            values, time_increment=0.001, component_names=["X"], max_samples=1000
+        )
+        frequencies = result.iloc[:, 0].to_numpy()
+        magnitude = result.iloc[:, 1].to_numpy()
+        self.assertEqual(len(result), 501)
+        self.assertAlmostEqual(frequencies[-1], 50.0)
+        self.assertAlmostEqual(frequencies[magnitude.argmax()], 10.0)
+        self.assertAlmostEqual(magnitude.max(), 0.5, delta=0.01)
+
+    def test_preview_limit_requires_integer_at_least_two(self):
+        for limit in (True, 1, 2.5):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                create_fourier_data(
+                    np.ones(10),
+                    time_increment=0.01,
+                    component_names=["X"],
+                    max_samples=limit,
+                )
+
     def test_requires_one_name_per_component(self):
         with self.assertRaisesRegex(ValueError, "must have a name"):
             create_fourier_data(
