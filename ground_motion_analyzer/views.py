@@ -3,12 +3,11 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.simpledialog import Dialog
 
-import pandas as pd
 from loguru import logger
 
 from . import widgets as w
+from .background import BackgroundTask
 from .constants import ColumnMode, Events, Palette
-from .data_loading import detect_column_mode, read_signal_data
 
 
 class MainView(tk.Frame):
@@ -34,16 +33,28 @@ class MainView(tk.Frame):
             sticky=(tk.N + tk.E + tk.W + tk.S),
             pady=(0, 12),
         )
-        self.control_panel = ControlPanel(self, bg=Palette.BG)
+        self.control_panel = ControlPanel(
+            self, bg=Palette.BG, on_load_start=self._loading_file
+        )
         self.control_panel.grid(row=1, column=0, sticky=(tk.N + tk.S + tk.W))
         self.control_panel.bind(Events.VARIABLES_UPDATED, self._plot)
 
         self.plot_area = w.PlotArea(self)
         self.plot_area.grid(row=1, column=1, sticky=(tk.N + tk.S + tk.E + tk.W))
 
+    def _loading_file(self):
+        self.header.set_download_enabled(False)
+        self.plot_area.cancel_pending()
+
     def _plot(self, *_):
         self.header.set_download_enabled(False)
-        control_variables = self.control_panel.get()
+        # Invalidate older work even if an in-progress numeric edit is invalid.
+        self.plot_area.cancel_pending()
+        try:
+            control_variables = self.control_panel.get()
+        except (tk.TclError, ValueError):
+            logger.debug("Waiting for valid control values")
+            return
         data = control_variables.get("data")
         scale_factor = control_variables.get("scale_factor")
         if data is not None:
@@ -70,8 +81,8 @@ class MainView(tk.Frame):
                 data_unit=control_variables["data_unit"],
                 demean=control_variables["demean"],
                 detrend=control_variables["detrend"],
+                on_ready=lambda: self.header.set_download_enabled(True),
             )
-            self.header.set_download_enabled(True)
         else:
             logger.info("No data file provided")
 
@@ -166,11 +177,16 @@ class DataTypeDialog(Dialog):
 class ControlPanel(tk.Frame):
     """Control panel"""
 
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, *args, on_load_start=None, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
         self.control_variables = {}
         self.data = None
+        self._on_load_start = on_load_start
+        self._file_task = BackgroundTask(self, self._file_loaded, self._file_failed)
+        self.loading = ttk.Label(self, text="Loading file...")
+        self.loading.grid(row=0, column=0, sticky=tk.W)
+        self.loading.grid_remove()
 
         # File Selector
         self.file_selector = w.FileSelector(self)
@@ -190,10 +206,7 @@ class ControlPanel(tk.Frame):
         # Scaling Factor
         self.scaling_factor = w.ScalingFactor(self)
         self.scaling_factor.grid(row=4, column=0, sticky=(tk.W + tk.E))
-        self.scaling_factor.bind(
-            Events.CONTROL_VALUE_UPDATED,
-            self._emit_values_change
-            )
+        self.scaling_factor.bind(Events.CONTROL_VALUE_UPDATED, self._emit_values_change)
 
         # Double Column Params
         self.double_col_params = w.DoubleColumnParams(self)
@@ -217,16 +230,36 @@ class ControlPanel(tk.Frame):
         self.statistics = w.Statistics(self, {})
         self.statistics.grid(row=8, column=0, sticky=(tk.W + tk.E))
 
-
     def _handle_new_file(self, *_):
         new_file = self.file_selector.get_file()
         if not new_file:
             logger.warning("No new file selected")
             return
-        self.data = read_signal_data(new_file)
-        self.column_format.set(detect_column_mode(self.data))
+        self.data = None
+        if self._on_load_start is not None:
+            self._on_load_start()
+        self.loading.grid()
+        # File parsing can be as expensive as plotting; keep it off Tk too.
+        self._file_task.submit(self._read_file, new_file)
+
+    @staticmethod
+    def _read_file(path):
+        # pandas/ObsPy/NumPy are needed only after selection, not to show the UI.
+        from .data_loading import detect_column_mode, read_signal_data
+
+        data = read_signal_data(path)
+        return data, detect_column_mode(data)
+
+    def _file_loaded(self, result):
+        self.data, column_mode = result
+        self.column_format.set(column_mode)
+        self.loading.grid_remove()
         self._emit_values_change()
-        
+
+    def _file_failed(self, error):
+        self.loading.grid_remove()
+        messagebox.showerror("Load failed", str(error), parent=self)
+
     def _emit_values_change(self, *_):
         logger.info("Variables updated!")
         self.event_generate(Events.VARIABLES_UPDATED)
