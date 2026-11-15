@@ -1,8 +1,6 @@
 import os
 import tkinter as tk
 
-from .views import MainView
-
 
 class Application(tk.Tk):
     """Root application"""
@@ -14,6 +12,9 @@ class Application(tk.Tk):
         self._configure_scaling()
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+        # Importing the application should not import the UI/analysis stack.
+        from .views import MainView
 
         self.main_view = MainView(self)
         self.main_view.grid(row=0, ipadx=10, ipady=10, sticky="nsew")

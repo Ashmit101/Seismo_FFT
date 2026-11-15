@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 from os import PathLike
+from pathlib import Path
 from typing import IO
+
+import pandas as pd
 from loguru import logger
 from obspy import read
-import pandas as pd
 
 from .constants import ColumnMode
 
@@ -26,10 +27,11 @@ def read_signal_data(source: str | PathLike[str] | IO[str]) -> pd.DataFrame | No
     finally:
         source.seek(0)
 
+
 def _is_mseed_file(source):
     file_path = Path(source)
     return file_path.suffix == ".mseed"
-        
+
 
 def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
     stream.seek(0)
@@ -77,13 +79,11 @@ def _read_mseed_file(source: str | PathLike[str]) -> pd.DataFrame | None:
         raise RuntimeError("MSEED file with multiple channels is not supported yet!")
     else:
         trace = streams[0]
-        dataframe = pd.DataFrame (
-            {
-            "time": trace.times("timestamp"),
-            "amplitude": trace.data
-            }
+        dataframe = pd.DataFrame(
+            {"time": trace.times("timestamp"), "amplitude": trace.data}
         )
         return dataframe
+
 
 def _find_first_numeric_row(lines: list[str]) -> tuple[int, int]:
     for index, line in enumerate(lines):
