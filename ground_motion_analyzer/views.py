@@ -55,7 +55,7 @@ class MainView(tk.Frame):
             logger.debug("Waiting for valid control values")
             return
         data = control_variables.get("data")
-        scale_factor = control_variables.get("scale_factor")
+
         if data is not None:
             columns = data.columns
             logger.info(f"Columns: {columns}")
@@ -76,10 +76,10 @@ class MainView(tk.Frame):
                 time_data=time_data,
                 time_increment=control_variables["time_increment"],
                 filter_params=control_variables["filter"],
-                scale_factor=scale_factor,
                 data_unit=control_variables["data_unit"],
                 demean=control_variables["demean"],
                 detrend=control_variables["detrend"],
+                sensitivity=control_variables["sensitivity"],
                 on_ready=lambda: self.header.set_download_enabled(True),
             )
         else:
@@ -215,11 +215,6 @@ class ControlPanel(tk.Frame):
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
 
-        # Scaling Factor
-        self.scaling_factor = w.ScalingFactor(self)
-        self.scaling_factor.grid(row=4, column=0, sticky=(tk.W + tk.E))
-        self.scaling_factor.bind(Events.CONTROL_VALUE_UPDATED, self._emit_values_change)
-
         # Double Column Params
         self.double_col_params = w.DoubleColumnParams(self)
         self.double_col_params.grid(row=5, column=0, sticky=(tk.W + tk.E))
@@ -243,10 +238,11 @@ class ControlPanel(tk.Frame):
         self.statistics.grid(row=8, column=0, sticky=(tk.W + tk.E))
 
     def _handle_new_file(self, *_):
-        new_file = self.file_selector.get_file()
+        new_file = self.file_selector.get()["file"]
         if not new_file:
             logger.warning("No new file selected")
             return
+
         self.data = None
         if self._on_load_start is not None:
             self._on_load_start()
@@ -267,7 +263,7 @@ class ControlPanel(tk.Frame):
             self.data.attrs.get("metadata", {}),
             sample_count=len(self.data),
             component_count=3 if column_mode == ColumnMode.THREE_COMPONENT else 1,
-            data_unit=self.file_selector.get_unit(),
+            data_unit=self.file_selector.get().get("data_unit"),
         )
         self.loading.grid_remove()
         self._emit_values_change()
@@ -292,11 +288,9 @@ class ControlPanel(tk.Frame):
         control_variables = {
             "column_format": self.column_format.get(),
             "time_increment": self.single_col_options.get(),
-            "scale_factor": self.scaling_factor.get(),
-            "file": self.file_selector.get_file(),
-            "data_unit": self.file_selector.get_unit(),
             "filter": self.filtering.get(),
             "data": self.data,
             **self.demean_detrend_options.get(),
+            **self.file_selector.get(),
         }
         return control_variables
