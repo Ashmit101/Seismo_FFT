@@ -307,6 +307,8 @@ class FileSelector(tk.LabelFrame):
         self.data_file = None
         self.data_unit = ""
         self.selected_file_name = tk.StringVar(value="No file selected")
+        self.sensitivity = 0.0
+
         tk.Button(
             self,
             text="Select File",
@@ -350,11 +352,13 @@ class FileSelector(tk.LabelFrame):
             from ground_motion_analyzer.views import DataTypeDialog
 
             data_type_dialog = DataTypeDialog(self, title="Data units")
-            data_unit = data_type_dialog.result
+            data_unit, sensitivity = data_type_dialog.result
             if data_unit is None:
                 return
             self.data_file = signal_filepath
             self.data_unit = data_unit
+            self.sensitivity = sensitivity
+
             self.selected_file_name.set(Path(signal_filepath).name)
             self.event_generate(Events.FILE_SELECTED)
 

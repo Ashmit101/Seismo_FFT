@@ -143,6 +143,7 @@ class DataTypeDialog(Dialog):
         }
         self.data_type = tk.StringVar(master=parent, value=next(iter(self.data_types)))
         self.unit = tk.StringVar(master=parent, value="unknown")
+        self.sensitivity = tk.DoubleVar(master=parent, value=0.0)
         super().__init__(parent, title=title)
 
     def body(self, frame):
@@ -151,7 +152,7 @@ class DataTypeDialog(Dialog):
             textvariable=self.data_type,
             values=list(self.data_types),
             state="readonly",
-            width=25,
+            width=15,
         )
         type_combo.grid(row=0, column=0, sticky=tk.W, padx=(0, 8))
         type_combo.bind("<<ComboboxSelected>>", self._on_type_change)
@@ -163,6 +164,17 @@ class DataTypeDialog(Dialog):
             width=12,
         )
         self.unit_combo.grid(row=0, column=1, sticky=tk.W)
+
+        ttk.Label(frame, text="Sensitivity: ").grid(row=1, column=0, sticky=tk.W)
+
+        self.sensitivity_input = ttk.Spinbox(
+            frame,
+            textvariable=self.sensitivity,
+            from_=0.0,
+            to=100.0,
+            width=12,
+        )
+        self.sensitivity_input.grid(row=1, column=1, sticky=tk.W)
         return type_combo
 
     def _on_type_change(self, _event=None):
@@ -171,7 +183,7 @@ class DataTypeDialog(Dialog):
         self.unit.set(units[0])
 
     def apply(self):
-        self.result = self.unit.get()
+        self.result = (self.unit.get(), self.sensitivity.get())
 
 
 class ControlPanel(tk.Frame):
