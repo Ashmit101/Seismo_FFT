@@ -99,6 +99,27 @@ Run the executable on macOS or Linux:
 
 On Windows, run `dist\ground_motion_analyzer.exe`.
 
+### Matplotlib font cache in standalone builds
+
+The frozen app uses a persistent, per-user font cache rather than PyInstaller's
+new temporary cache on every launch:
+
+- macOS: `~/Library/Caches/Seismo_FFT/matplotlib`
+- Windows: `%LOCALAPPDATA%\Seismo_FFT\matplotlib`
+- Linux: `$XDG_CACHE_HOME/Seismo_FFT/matplotlib` (default `~/.cache/Seismo_FFT/matplotlib`)
+
+The first plot can still report **"Matplotlib is building the font cache"**.
+Subsequent launches reuse that index; deleting the cache or a Matplotlib cache
+format change can require another rebuild. This does not remove PyInstaller's
+separate one-file extraction time. Rebuild the executable using the command
+above to include this fix; existing executables do not update automatically.
+
+For a custom writable location, set `SEISMO_FFT_MPLCONFIGDIR` before launching the
+executable. Ordinary `MPLCONFIGDIR` is overwritten by PyInstaller's runtime hook,
+so the frozen app uses this app-specific override. Source runs retain Matplotlib's
+normal `MPLCONFIGDIR` behavior. If the persistent directory is not writable, the
+app logs a warning and retains PyInstaller's temporary-cache fallback.
+
 To build a Python wheel and source distribution instead:
 
 ```bash

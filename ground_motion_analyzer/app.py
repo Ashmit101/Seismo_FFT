@@ -1,11 +1,16 @@
 import os
 import tkinter as tk
 
+from .runtime import configure_matplotlib_cache
+
 
 class Application(tk.Tk):
     """Root application"""
 
     def __init__(self, *args, **kwargs):
+        # PyInstaller's runtime hooks have run, but no plotting/ObsPy imports
+        # have: select the persistent font cache before either can load it.
+        configure_matplotlib_cache()
         super().__init__(*args, **kwargs)
 
         self._configure_window()

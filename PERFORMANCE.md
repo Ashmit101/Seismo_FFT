@@ -164,6 +164,35 @@ module loading. Use the package entry point shown above for interactive profilin
 The baseline synthetic profile was captured before editing the plotting code;
 the current probe cannot recreate the old implementation by itself.
 
+## Frozen font-cache follow-up (2026-11-15)
+
+PyInstaller 6.20's Matplotlib runtime hook replaces `MPLCONFIGDIR` with a fresh
+temporary directory on each launch. [runtime.py](<ground_motion_analyzer/runtime.py>)
+now selects a writable, persistent per-user directory after those hooks run and
+before the application imports Matplotlib or ObsPy. Source-run settings are
+unchanged. See [README.md](<README.md#matplotlib-font-cache-in-standalone-builds>)
+for cache locations, the frozen-app override, and rebuilding instructions.
+
+Built [font_cache_probe.py](<tests/font_cache_probe.py>) as a real one-file
+PyInstaller executable and launched it twice with the same empty-at-first cache:
+
+| Probe measurement | First launch | Second launch |
+|---|---:|---:|
+| Matplotlib/font imports + text rendering | 13.993 s | 1.132 s |
+| Existing font index reused without rewriting | No | Yes |
+| Font-cache rebuild message | Yes | No |
+
+The extraction directory changed between launches. Text rendered using the
+bundled DejaVu Sans font on both runs, confirming the cached relative font paths
+survive relocation. Times exclude bootloader extraction and are not full-app
+startup measurements. The production executable was not rebuilt; rebuild it
+from the updated sources. A first-use build or a changed/deleted font cache still
+costs time; this fix prevents rebuilding on every launch, not the initial scan.
+
+All **44 tests** and the source real-Tk smoke test pass after this follow-up,
+including new platform-path, override, source-configuration preservation, and
+unwritable-cache fallback tests. No new dependencies.
+
 ## Remaining tradeoffs
 
 - Display zoom and toolbar image/vector saves show the reduced envelope, not
