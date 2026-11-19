@@ -48,7 +48,6 @@ class MainView(tk.Frame):
 
     def _plot(self, *_):
         self.header.set_download_enabled(False)
-        # Invalidate older work even if an in-progress numeric edit is invalid.
         self.plot_area.cancel_pending()
         try:
             control_variables = self.control_panel.get()
@@ -135,34 +134,35 @@ class MainView(tk.Frame):
 
 
 class DataTypeDialog(Dialog):
-    """A dialog that asks for data type and unit."""
-
     def __init__(self, parent, title):
         self.data_types = {
+            "Unknown / raw counts": ["unknown", "counts"],
             "Acceleration": ["m/s²", "cm/s²", "g"],
             "Velocity": ["m/s", "cm/s"],
+            "Displacement": ["m", "cm"],
         }
-        self.data_type = tk.StringVar(value=next(iter(self.data_types)))
-        self.unit = tk.StringVar(value=self.data_types[self.data_type.get()][0])
+        self.data_type = tk.StringVar(master=parent, value=next(iter(self.data_types)))
+        self.unit = tk.StringVar(master=parent, value="unknown")
         super().__init__(parent, title=title)
 
     def body(self, frame):
-        ttk.Label(frame, text="Provide unit for signal").grid(row=0)
-
         type_combo = ttk.Combobox(
             frame,
             textvariable=self.data_type,
             values=list(self.data_types),
+            state="readonly",
+            width=25,
         )
-        type_combo.grid()
+        type_combo.grid(row=0, column=0, sticky=tk.W, padx=(0, 8))
         type_combo.bind("<<ComboboxSelected>>", self._on_type_change)
-
         self.unit_combo = ttk.Combobox(
             frame,
             textvariable=self.unit,
             values=self.data_types[self.data_type.get()],
+            state="readonly",
+            width=12,
         )
-        self.unit_combo.grid()
+        self.unit_combo.grid(row=0, column=1, sticky=tk.W)
         return type_combo
 
     def _on_type_change(self, _event=None):
@@ -239,12 +239,10 @@ class ControlPanel(tk.Frame):
         if self._on_load_start is not None:
             self._on_load_start()
         self.loading.grid()
-        # File parsing can be as expensive as plotting; keep it off Tk too.
         self._file_task.submit(self._read_file, new_file)
 
     @staticmethod
     def _read_file(path):
-        # pandas/ObsPy/NumPy are needed only after selection, not to show the UI.
         from .data_loading import detect_column_mode, read_signal_data
 
         data = read_signal_data(path)
@@ -253,6 +251,12 @@ class ControlPanel(tk.Frame):
     def _file_loaded(self, result):
         self.data, column_mode = result
         self.column_format.set(column_mode)
+        self.statistics.set_file_info(
+            self.data.attrs.get("metadata", {}),
+            sample_count=len(self.data),
+            component_count=3 if column_mode == ColumnMode.THREE_COMPONENT else 1,
+            data_unit=self.file_selector.get_unit(),
+        )
         self.loading.grid_remove()
         self._emit_values_change()
 

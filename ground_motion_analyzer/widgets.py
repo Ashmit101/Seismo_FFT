@@ -292,7 +292,6 @@ class Filtering(tk.LabelFrame):
 class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
 
-    # Retain the directory across selectors for the current application session.
     _last_directory: ClassVar[Path | None] = None
 
     @classmethod
@@ -321,7 +320,6 @@ class FileSelector(tk.LabelFrame):
         ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
     def _load_file(self):
-        # No dialog opens at startup. If called before mapping, let Tk paint first.
         if not self.winfo_viewable():
             self.winfo_toplevel().after(100, self._open_dialog)
             return
@@ -337,11 +335,11 @@ class FileSelector(tk.LabelFrame):
             filetypes=[
                 (
                     "Signal data",
-                    "*.csv *.txt *.tsv *.mseed *.sac *.SAC *.sacxy *.SACXY",
+                    "*.csv *.txt *.tsv *.mseed *.MSEED *.sac *.SAC *.sacxy *.SACXY",
                 ),
                 ("CSV", "*.csv"),
                 ("Text", "*.txt"),
-                ("MSEED", "*.mseed"),
+                ("MSEED", "*.mseed *.MSEED"),
                 ("SAC", "*.sac *.SAC *.sacxy *.SACXY"),
                 ("All files", "*.*"),
             ],
@@ -351,10 +349,10 @@ class FileSelector(tk.LabelFrame):
             type(self)._last_directory = Path(signal_filepath).parent
             from ground_motion_analyzer.views import DataTypeDialog
 
-            data_type_dialog = DataTypeDialog(self, title="Data type")
+            data_type_dialog = DataTypeDialog(self, title="Data units")
             data_unit = data_type_dialog.result
             if data_unit is None:
-                return  # Cancelling the unit dialog must not replace the loaded file.
+                return
             self.data_file = signal_filepath
             self.data_unit = data_unit
             self.selected_file_name.set(Path(signal_filepath).name)
@@ -454,8 +452,7 @@ class PlotArea(tk.Frame):
         self._task = BackgroundTask(self, self._show_plot, self._plot_failed)
 
     def _show_plot(self, result):
-        """Attach the completed, previously detached figure on the Tk thread."""
-        # The Tk backend is only imported when there is a first plot to display.
+        """Show a finished plot."""
         from matplotlib.backends.backend_tkagg import (
             FigureCanvasTkAgg,
             NavigationToolbar2Tk,
@@ -468,8 +465,6 @@ class PlotArea(tk.Frame):
             self.toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
             self.toolbar_frame.grid(row=1, column=0, sticky="sew")
         else:
-            # Reuse the Tk canvas; no worker ever edits its live figure.
-            # Recreate the toolbar so pan/zoom callbacks bind to the new figure.
             if self.canvas.widgetlock.isowner(self.toolbar):
                 self.canvas.widgetlock.release(self.toolbar)
             self.toolbar.destroy()
@@ -499,14 +494,14 @@ class PlotArea(tk.Frame):
         messagebox.showerror("Plot failed", str(error), parent=self)
 
     def cancel_pending(self):
-        """Do not display/export an old plot while a replacement file loads."""
+        """Drop old plot work."""
         self._task.invalidate()
         self._fourier_data = None
         self._on_ready = None
         self.loading.grid_remove()
 
     def plot(self, motion_data, *, on_ready=None, **kwargs):
-        """Queue analysis; only this small entry point runs in the Tk handler."""
+        """Queue a plot."""
         self._fourier_data = None
         self._on_ready = on_ready
         self.loading.configure(text="Loading...")
@@ -526,9 +521,7 @@ class PlotArea(tk.Frame):
         demean=True,
         detrend=False,
     ):
-        """Build a detached figure and spectrum without accessing Tk/canvases."""
-        # Heavy imports happen on first analysis, in the worker, not at startup.
-        # Avoid pyplot and global style/backend mutations in background threads.
+        """Build the plot and FFT."""
         import numpy as np
         import pandas as pd
         from matplotlib.figure import Figure
@@ -593,7 +586,6 @@ class PlotArea(tk.Frame):
             raise ValueError("Plotting supports either one or three components.")
 
         figure = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
-        # Fixed layout avoids tight_layout's renderer/canvas work in the worker.
         figure.subplots_adjust(
             left=0.10, right=0.96, bottom=0.10, top=0.93, hspace=0.60, wspace=0.35
         )
@@ -662,12 +654,7 @@ class PlotArea(tk.Frame):
 
     @staticmethod
     def _display_data(x, y, max_points=4998):
-        """Bound fill polygons to <10k vertices, preserving per-bin extrema.
-
-        Only display data is reduced: FFT/export retain all samples and bins.
-        Min/max pairs preserve narrow peaks that a plain stride could miss.
-        Zooming shows this envelope, not every original sample.
-        """
+        """Reduce points for display while keeping peaks."""
         import numpy as np
 
         if len(y) <= max_points:
@@ -684,7 +671,6 @@ class PlotArea(tk.Frame):
                 [len(y) - 1],
             )
         )
-        # Include the partial last bin's extrema as well without exceeding cap.
         if full_bins * bin_size < len(y):
             remainder = y[full_bins * bin_size :]
             indices = np.concatenate(

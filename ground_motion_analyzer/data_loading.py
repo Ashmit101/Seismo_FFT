@@ -32,7 +32,7 @@ def read_signal_data(source: str | PathLike[str] | IO[str]) -> pd.DataFrame | No
 
 def _is_mseed_file(source):
     file_path = Path(source)
-    return file_path.suffix == ".mseed"
+    return file_path.suffix.lower() == ".mseed"
 
 
 def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
@@ -94,9 +94,6 @@ def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
     from obspy.io.sac.util import SacIOError
 
     logger.info("Reading SAC file.")
-    # SACTrace detects binary byte order. Alphanumeric SAC uses the same
-    # headers but a different encoding and may also have a .sac extension.
-    # Own the file handle so malformed input cannot leak a reader's open file.
     with open(source, "rb") as stream:
         try:
             sac = SACTrace.read(stream)
@@ -109,7 +106,6 @@ def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
                     "Could not read a valid binary or ASCII SAC file."
                 ) from error
 
-    # Spectral/XY files must not be silently interpreted as waveform samples.
     if sac.iftype != "itime" or sac.leven is not True:
         raise ValueError("Only evenly sampled SAC time-series files are supported.")
     if sac.delta is None or not np.isfinite(sac.delta) or sac.delta <= 0:
@@ -122,11 +118,8 @@ def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
     begin = sac.b if sac.b is not None else 0.0
     if not np.isfinite(begin):
         raise ValueError("SAC begin time (b) must be finite.")
-    # Retain SAC's offset from its reference time, not large epoch timestamps:
-    # float64 relative seconds preserve short sample intervals for filtering/FFT.
     time = begin + np.arange(len(sac.data), dtype=float) * sac.delta
-    # pandas row selection requires native-endian arrays. ObsPy preserves the
-    # file's byte order, so normalize big-endian recordings without rescaling.
+    # pandas needs native byte order.
     amplitudes = np.asarray(sac.data, dtype=np.float32)
     data = pd.DataFrame({"time": time, "amplitude": amplitudes})
     data.attrs["metadata"] = {

@@ -7,11 +7,7 @@ from loguru import logger
 
 
 class BackgroundTask:
-    """One daemon worker with a bounded, latest-request-wins pending slot.
-
-    Construct and submit on the Tk thread. Results are polled there and handed
-    to callbacks via after(0); workers never hold or access a Tk widget.
-    """
+    """Run one job at a time and keep only the latest pending job."""
 
     def __init__(self, owner, on_result, on_error):
         self.owner = owner
@@ -53,8 +49,6 @@ class BackgroundTask:
     @staticmethod
     def _run(results, request):
         generation, function, args, kwargs = request
-        # Task boundary: forward any ordinary failure so Tk can clear loading
-        # state and report it. BaseException subclasses still propagate.
         try:
             result = function(*args, **kwargs)
         except Exception as error:  # noqa: BLE001
@@ -88,8 +82,6 @@ class BackgroundTask:
         if error is not None:
             self.on_error(error)
         else:
-            # The result callback is another task boundary: route display
-            # failures through the same UI cleanup/error handler as worker failures.
             try:
                 self.on_result(result)
             except Exception as display_error:  # noqa: BLE001

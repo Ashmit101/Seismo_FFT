@@ -8,8 +8,6 @@ class Application(tk.Tk):
     """Root application"""
 
     def __init__(self, *args, **kwargs):
-        # PyInstaller's runtime hooks have run, but no plotting/ObsPy imports
-        # have: select the persistent font cache before either can load it.
         configure_matplotlib_cache()
         super().__init__(*args, **kwargs)
 
@@ -18,7 +16,6 @@ class Application(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Importing the application should not import the UI/analysis stack.
         from .views import MainView
 
         self.main_view = MainView(self)
