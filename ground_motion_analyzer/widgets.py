@@ -335,10 +335,14 @@ class FileSelector(tk.LabelFrame):
             title="Select signal data file",
             initialdir=str(self._initial_directory()),
             filetypes=[
-                ("Signal data", "*.csv *.txt *.tsv *.mseed"),
+                (
+                    "Signal data",
+                    "*.csv *.txt *.tsv *.mseed *.sac *.SAC *.sacxy *.SACXY",
+                ),
                 ("CSV", "*.csv"),
                 ("Text", "*.txt"),
                 ("MSEED", "*.mseed"),
+                ("SAC", "*.sac *.SAC *.sacxy *.SACXY"),
                 ("All files", "*.*"),
             ],
         )

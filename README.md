@@ -81,6 +81,23 @@ To run the GUI from source:
 uv run python -m ground_motion_analyzer
 ```
 
+### Supported GUI input files
+
+Use **Select File** to open CSV/text, MiniSEED, or **SAC** recordings. The SAC
+filter accepts `.sac` / `.SAC` and `.sacxy` / `.SACXY`; the loader handles binary
+SAC in either byte order and SAC ASCII (alphanumeric) files.
+
+SAC support is for a single, evenly sampled time-history component per file.
+The time axis uses the SAC begin offset (`b`) and sample interval (`delta`), in
+seconds relative to the SAC reference time. Amplitudes are read unchanged; the
+existing unit-selection dialog still applies, and no instrument-response or
+physical-unit conversion is performed automatically. Filtering, plotting, FFT,
+and FFT CSV export use the same background processing path as other inputs.
+Spectral/XY SAC files, unevenly sampled records, invalid sample intervals, and
+nonfinite samples are rejected with an error rather than misinterpreted.
+
+### Building the GUI
+
 To build a standalone executable for your current operating system:
 
 ```bash
