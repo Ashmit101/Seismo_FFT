@@ -9,6 +9,7 @@ from loguru import logger
 
 from .background import BackgroundTask
 from .constants import ColumnMode, Events, Palette
+from .regularize import regularize_time_series
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -531,12 +532,9 @@ class PlotArea(tk.Frame):
             component_data = component_data.loc[valid]
             time_values = time_values.loc[valid].to_numpy(dtype=float)
 
-            time_steps = np.diff(time_values)
-            if len(time_steps) == 0 or np.any(time_steps <= 0):
-                raise ValueError("Time values must be strictly increasing.")
-            time_increment = float(np.median(time_steps))
-            if not np.allclose(time_steps, time_increment, rtol=1e-3, atol=1e-12):
-                raise ValueError("Filtering and FFT require uniformly sampled data.")
+            time_values, component_data, time_increment = regularize_time_series(
+                time_values, component_data
+            )
 
         if time_increment <= 0:
             raise ValueError("Time increment must be greater than zero.")

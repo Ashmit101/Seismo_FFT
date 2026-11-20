@@ -137,6 +137,9 @@ def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
 def _find_first_numeric_row(lines: list[str]) -> tuple[int, int]:
     for index, line in enumerate(lines):
         fields = re.split(r"[\s,;]+", line.strip()) if line.strip() else []
+        if len(fields) > 4:
+            fields = fields[:4]
+            logger.warning(f"Ignoring column {fields[4:]}")
         if len(fields) in {1, 2, 4} and _all_numeric(fields):
             return index, len(fields)
     raise ValueError("No numeric signal samples were found in the selected file.")
