@@ -37,11 +37,7 @@ def create_fourier_data(
     component_names: Sequence[object],
     max_samples: int | None = None,
 ) -> pd.DataFrame:
-    """Return one-sided FFT magnitudes, optionally at preview resolution.
-
-    The GUI/export defaults to full resolution to preserve the original Nyquist
-    range. Callers requesting a reduced-bandwidth preview may set max_samples.
-    """
+    """Return one-sided FFT magnitudes."""
     signal_values = np.asarray(values, dtype=float)
     if signal_values.ndim == 1:
         signal_values = signal_values[:, np.newaxis]
@@ -61,16 +57,12 @@ def create_fourier_data(
             raise ValueError("Preview sample limit must be an integer of at least two.")
         if len(signal_values) > max_samples:
             factor = (len(signal_values) + max_samples - 1) // max_samples
-            # Anti-alias before decimation; a stride alone would fold high
-            # frequencies into the spectrum. This lowers the Nyquist limit and
-            # loses high-frequency content, so it is opt-in, never used for export.
+            # Anti-alias before reducing samples.
             signal_values = resample_poly(signal_values, 1, factor, axis=0)
             time_increment *= factor
 
     sample_count = len(signal_values)
     frequencies = rfftfreq(sample_count, d=time_increment)
-    # Independent component transforms can use all cores. For one component,
-    # SciPy may still use one worker; responsiveness comes from the daemon job.
     magnitudes = np.abs(rfft(signal_values, axis=0, workers=-1)) / sample_count
 
     columns = {"Frequency (Hz)": frequencies}

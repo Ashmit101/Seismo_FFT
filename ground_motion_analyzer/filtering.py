@@ -18,21 +18,7 @@ def filter_signal(
     *,
     sampling_rate: float,
 ) -> np.ndarray | pd.Series:
-    """Return a zero-phase Butterworth-filtered copy of one-dimensional data.
-
-    ``filter_params`` accepts the dictionary produced by
-    :meth:`ground_motion_analyzer.widgets.Filtering.get`::
-
-        {
-            "is_filter_on": True,
-            "filter_type": "bandpass",
-            "cutoff_frequency": [0.5, 20.0],
-            "order": 4,
-        }
-
-    The sampling rate is expressed in samples per second (Hz). When filtering is
-    disabled, a copy is returned without designing a filter.
-    """
+    """Apply a zero-phase Butterworth filter."""
     values = np.asarray(data, dtype=float)
     if values.ndim != 1:
         raise ValueError("Signal data must be one-dimensional.")

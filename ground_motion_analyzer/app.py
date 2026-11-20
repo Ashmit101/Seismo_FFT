@@ -1,6 +1,9 @@
 import os
 import tkinter as tk
 
+from ground_motion_analyzer.constants import Events
+
+from .menu import MainMenu
 from .runtime import configure_matplotlib_cache
 
 
@@ -8,8 +11,6 @@ class Application(tk.Tk):
     """Root application"""
 
     def __init__(self, *args, **kwargs):
-        # PyInstaller's runtime hooks have run, but no plotting/ObsPy imports
-        # have: select the persistent font cache before either can load it.
         configure_matplotlib_cache()
         super().__init__(*args, **kwargs)
 
@@ -18,15 +19,19 @@ class Application(tk.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Importing the application should not import the UI/analysis stack.
         from .views import MainView
 
         self.main_view = MainView(self)
         self.main_view.grid(row=0, ipadx=10, ipady=10, sticky="nsew")
 
+        self._bind_events()
+
     def _configure_window(self):
         self.title("Ground Motion Analyzer")
         self.geometry("1280x800")
+
+        menu = MainMenu(self)
+        self.config(menu=menu)
 
     def _configure_scaling(self):
         try:
@@ -43,3 +48,12 @@ class Application(tk.Tk):
             self.tk.call("tk", "scaling", max(scale, 1.25))
         except tk.TclError:
             self.tk.call("tk", "scaling", 1.25)
+
+    def _bind_events(self):
+        event_callback_map = {
+            Events.EXPORT_FFT_DATA: self.main_view.download_fourier_data,
+            Events.EXPORT_TIME_SERIES_DATA: self.main_view.download_time_series_data,
+        }
+
+        for event, callback in event_callback_map.items():
+            self.bind(event, callback)

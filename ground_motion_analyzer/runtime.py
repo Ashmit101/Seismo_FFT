@@ -1,4 +1,4 @@
-"""Runtime setup for the standalone executable, without scientific imports."""
+"""Standalone app setup."""
 
 import logging
 import os
@@ -8,13 +8,7 @@ from tempfile import TemporaryFile
 
 
 def configure_matplotlib_cache():
-    """Replace PyInstaller's per-launch MPLCONFIGDIR with a persistent cache.
-
-    Source runs keep Matplotlib's normal configuration and MPLCONFIGDIR behavior.
-    The frozen build supports SEISMO_FFT_MPLCONFIGDIR as an explicit override,
-    since PyInstaller overwrites MPLCONFIGDIR before application code executes.
-    Call before importing matplotlib (including indirectly through ObsPy).
-    """
+    """Use a reusable Matplotlib cache in frozen builds."""
     if not getattr(sys, "frozen", False):
         return None
 
@@ -35,8 +29,6 @@ def configure_matplotlib_cache():
             cache_dir = base / "Seismo_FFT" / "matplotlib"
 
         cache_dir.mkdir(parents=True, exist_ok=True)
-        # Check actual write access rather than trusting permission bits. Keep
-        # PyInstaller's temporary fallback if the user's cache is not writable.
         with TemporaryFile(dir=cache_dir):
             pass
     except (OSError, RuntimeError) as error:
@@ -46,7 +38,5 @@ def configure_matplotlib_cache():
         )
         return None
 
-    # Matplotlib 3.10 serializes bundled font paths relative to mpl-data, so the
-    # cached index remains valid when a one-file build extracts to a new _MEI dir.
     os.environ["MPLCONFIGDIR"] = str(cache_dir)
     return cache_dir

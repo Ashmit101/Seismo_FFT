@@ -37,6 +37,11 @@ class FileDialogTests(unittest.TestCase):
                 self.assertTrue(Path(options["initialdir"]).is_dir())
                 self.assertIs(options["parent"], self.selector)
                 self.assertIn("*.mseed", options["filetypes"][0][1])
+                self.assertIn("*.sac", options["filetypes"][0][1])
+                self.assertIn("*.SAC", options["filetypes"][0][1])
+                self.assertIn(
+                    ("SAC", "*.sac *.SAC *.sacxy *.SACXY"), options["filetypes"]
+                )
                 self.assertEqual(self.selector.data_file, selected)
                 self.selector.event_generate.assert_called_once()
                 self.assertEqual(FileSelector._initial_directory(), Path(directory))

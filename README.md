@@ -1,15 +1,10 @@
 # Seismo FFT
 
-Seismology signal analysis with FFT (Fast Fourier Transform): directional components, frequency-domain plots, and interactive exploration via a Marimo notebook.
+Ground motion viewer and FFT tool.
 
-## Requirements
+## Install
 
-- **Python** 3.12+
-- **[uv](https://docs.astral.sh/uv/)** (recommended) or pip
-
-## Installation
-
-Clone the repo and install dependencies with uv:
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/Seismo_FFT.git
@@ -17,111 +12,73 @@ cd Seismo_FFT
 uv sync
 ```
 
-Or with pip:
-
-```bash
-pip install -e .
-```
-
-## Usage
-
-### Interactive app (Marimo)
-
-Run the Marimo notebook for interactive signal upload, column mapping, and FFT visualization:
-
-```bash
-uv run marimo edit seismo_signal.py
-```
-
-- Upload a tab-delimited (`.txt`) or CSV file.
-- Choose columns for time, vertical, east–west, and north–south.
-- View time-series and frequency-domain plots.
-
-**Static export (e.g. for GitHub Pages):**
-
-```bash
-uv run marimo export html-wasm seismo_signal.py -o seismo_fft_page --mode run
-```
-
-Then serve or open the generated files in `seismo_fft_page/`.
-
-### Command-line script
-
-Run the directional FFT analysis script (expects a data file in the project root):
-
-```bash
-uv run python main.py
-```
-
-**Data format:** `main.py` looks for **`new_data.txt`** in the project root, tab-delimited, with columns:
-
-- `Time (s)` — time in seconds
-- `V` — vertical component
-- `E-W` — east–west component
-- `N-S` — north–south component
-
-Results are shown as matplotlib figures and optionally written to `directional_components.csv`.
-
-## Project structure
-
-| Path | Description |
-|------|-------------|
-| `seismo_signal.py` | Marimo app: interactive signal upload, column mapping, FFT plots |
-| `main.py` | Script: load data, directional FFT analysis, matplotlib plots |
-| `plot_signal.py`, `plot_fft.py` | Plotting helpers |
-
-
-# Graphical User Interface
-
-The application is named "Ground Motion Analyzer" and its source code is inside `ground_motion_analyzer`. The GUI is built entirely with [Tkinter](https://docs.python.org/3/library/tkinter.html).
-
-To run the GUI from source:
+## Run the GUI
 
 ```bash
 uv run python -m ground_motion_analyzer
 ```
 
-To build a standalone executable for your current operating system:
+Supported files:
+
+- CSV / TXT / TSV
+- MiniSEED (`.mseed`)
+- SAC binary or ASCII (`.sac`, `.sacxy`)
+
+SAC support is for one evenly sampled component per file.
+
+## Build executable
 
 ```bash
 uv run pyinstaller --clean --noconfirm ground_motion_analyzer.spec
 ```
 
-Use the spec file so the executable includes ObsPy's reader plugins, dependency
-metadata, native libraries, and version-file handling. Building directly from
-`ground_motion_analyzer/__main__.py` bypasses these settings.
-
-Run the executable on macOS or Linux:
+Run it:
 
 ```bash
-./dist/ground_motion_analyzer
+./dist/ground_motion_analyzer       # macOS/Linux
+dist\ground_motion_analyzer.exe     # Windows
 ```
 
-On Windows, run `dist\ground_motion_analyzer.exe`.
+The first plot may build Matplotlib's font cache. Later launches reuse it.
 
-### Matplotlib font cache in standalone builds
+## Automated releases
 
-The frozen app uses a persistent, per-user font cache rather than PyInstaller's
-new temporary cache on every launch:
+The [build and release workflow](.github/workflows/build-release.yml) runs on pushes
+(including merged pull requests) to `main` and `staging`:
 
-- macOS: `~/Library/Caches/Seismo_FFT/matplotlib`
-- Windows: `%LOCALAPPDATA%\Seismo_FFT\matplotlib`
-- Linux: `$XDG_CACHE_HOME/Seismo_FFT/matplotlib` (default `~/.cache/Seismo_FFT/matplotlib`)
+- **`staging` — beta:** every push builds Linux, Windows, and macOS executables plus
+  a Python wheel and source distribution, then publishes them together as a
+  [GitHub prerelease](https://github.com/Ashmit101/Seismo_FFT/releases).
+  Versions use `<project-version>b<workflow-run-number>` (for example, `0.1.3b42`),
+  with a matching `v0.1.3b42` tag pointing at the pushed commit. The Python package
+  version is stamped only in the CI checkout; no version bump needs to be committed.
+  Rerunning the same workflow run reuses its beta tag and replaces its assets.
+- **`main` — stable:** publishes `v<project-version>` only if that release does not
+  already exist. Bump the version in [pyproject.toml](pyproject.toml) for a new stable
+  release.
 
-The first plot can still report **"Matplotlib is building the font cache"**.
-Subsequent launches reuse that index; deleting the cache or a Matplotlib cache
-format change can require another rebuild. This does not remove PyInstaller's
-separate one-file extraction time. Rebuild the executable using the command
-above to include this fix; existing executables do not update automatically.
+Publishing waits for the Python package and all three executable builds to succeed.
+Beta releases are marked **Pre-release** and never replace the latest stable release.
+These are unsigned desktop binaries; beta deployment means publishing downloadable
+release assets, not updating the Marimo GitHub Pages site.
 
-For a custom writable location, set `SEISMO_FFT_MPLCONFIGDIR` before launching the
-executable. Ordinary `MPLCONFIGDIR` is overwritten by PyInstaller's runtime hook,
-so the frozen app uses this app-specific override. Source runs retain Matplotlib's
-normal `MPLCONFIGDIR` behavior. If the persistent directory is not writable, the
-app logs a warning and retains PyInstaller's temporary-cache fallback.
+To enable this, include the workflow on `staging` and allow GitHub Actions to run in
+repository settings. Publishing uses the automatic `GITHUB_TOKEN` with
+`contents: write` only in the release job; no additional secrets are needed.
+Repository or organization policies and tag rules must allow that token to create
+release tags. The separate [Pages workflow](.github/workflows/deploy_marimo.yaml)
+continues to deploy only from `main`.
 
-To build a Python wheel and source distribution instead:
+## Other tools
+
+Marimo notebook:
 
 ```bash
-uv build
+uv run marimo edit seismo_signal.py
+```
+
+Old command-line example:
+
+```bash
+uv run python main.py
 ```

@@ -19,6 +19,8 @@ def read_signal_data(source: str | PathLike[str] | IO[str]) -> pd.DataFrame | No
     if isinstance(source, (str, PathLike)):
         if _is_mseed_file(source):
             return _read_mseed_file(source)
+        if Path(source).suffix.lower() in {".sac", ".sacxy"}:
+            return _read_sac_file(source)
         with open(source, encoding="utf-8") as stream:
             return _read_signal_stream(stream)
 
@@ -30,7 +32,7 @@ def read_signal_data(source: str | PathLike[str] | IO[str]) -> pd.DataFrame | No
 
 def _is_mseed_file(source):
     file_path = Path(source)
-    return file_path.suffix == ".mseed"
+    return file_path.suffix.lower() == ".mseed"
 
 
 def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
@@ -85,9 +87,59 @@ def _read_mseed_file(source: str | PathLike[str]) -> pd.DataFrame | None:
         return dataframe
 
 
+def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
+    """Read one evenly sampled SAC time history without rescaling amplitudes."""
+    import numpy as np
+    from obspy.io.sac import SACTrace
+    from obspy.io.sac.util import SacIOError
+
+    logger.info("Reading SAC file.")
+    with open(source, "rb") as stream:
+        try:
+            sac = SACTrace.read(stream)
+        except (SacIOError, ValueError):
+            stream.seek(0)
+            try:
+                sac = SACTrace.read(stream, ascii=True)
+            except (SacIOError, ValueError) as error:
+                raise ValueError(
+                    "Could not read a valid binary or ASCII SAC file."
+                ) from error
+
+    if sac.iftype != "itime" or sac.leven is not True:
+        raise ValueError("Only evenly sampled SAC time-series files are supported.")
+    if sac.delta is None or not np.isfinite(sac.delta) or sac.delta <= 0:
+        raise ValueError("SAC sample interval (delta) must be positive and finite.")
+    if sac.data is None or len(sac.data) < 2:
+        raise ValueError("At least two signal samples are required in the SAC file.")
+    if not np.isfinite(sac.data).all():
+        raise ValueError("SAC signal samples must be finite.")
+
+    begin = sac.b if sac.b is not None else 0.0
+    if not np.isfinite(begin):
+        raise ValueError("SAC begin time (b) must be finite.")
+    time = begin + np.arange(len(sac.data), dtype=float) * sac.delta
+    # pandas needs native byte order.
+    amplitudes = np.asarray(sac.data, dtype=np.float32)
+    data = pd.DataFrame({"time": time, "amplitude": amplitudes})
+    data.attrs["metadata"] = {
+        "format": "SAC",
+        "sampling_rate": 1.0 / sac.delta,
+        "time_increment": sac.delta,
+        "begin_time": begin,
+        "station": sac.kstnm or "",
+        "network": sac.knetwk or "",
+        "channel": sac.kcmpnm or "",
+    }
+    return data
+
+
 def _find_first_numeric_row(lines: list[str]) -> tuple[int, int]:
     for index, line in enumerate(lines):
         fields = re.split(r"[\s,;]+", line.strip()) if line.strip() else []
+        if len(fields) > 4:
+            fields = fields[:4]
+            logger.warning(f"Ignoring column {fields[4:]}")
         if len(fields) in {1, 2, 4} and _all_numeric(fields):
             return index, len(fields)
     raise ValueError("No numeric signal samples were found in the selected file.")
