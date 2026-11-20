@@ -44,6 +44,73 @@ class DataLoadingTests(unittest.TestCase):
         self.assertEqual(data.attrs["metadata"]["Sampling_rate"], 100.0)
         self.assertEqual(data.attrs["header_row"], 5)
 
+    def test_reads_quoted_acceleration_csv_with_extra_column(self):
+        source = io.StringIO(
+            '"Time (s)","Acceleration x (m/s^2)","Acceleration y (m/s^2)",'
+            '"Acceleration z (m/s^2)","Absolute acceleration (m/s^2)"\n'
+            "3.867218000E-3,-9.337386489E-2,-5.746084079E-2,9.586383820E0,9.587010752E0\n"
+            "5.867764000E-3,-9.097966552E-2,-5.985504389E-2,9.586383820E0,9.587002381E0\n"
+        )
+
+        data = read_signal_data(source)
+
+        self.assertEqual(data.shape, (2, 4))
+        self.assertEqual(
+            list(data.columns),
+            [
+                "Time (s)",
+                "Acceleration x (m/s^2)",
+                "Acceleration y (m/s^2)",
+                "Acceleration z (m/s^2)",
+            ],
+        )
+        self.assertEqual(data.attrs["header_row"], 1)
+        self.assertEqual(data.attrs["metadata"], {})
+        self.assertEqual(detect_column_mode(data), ColumnMode.THREE_COMPONENT)
+        self.assertAlmostEqual(data.iloc[0, 0], 0.003867218)
+        self.assertAlmostEqual(data.iloc[0, 3], 9.586383820)
+        self.assertEqual(source.tell(), 0)
+
+    def test_ignores_extra_columns_in_headerless_files(self):
+        for separator in (",", ";", "\t", " "):
+            for column_count in (5, 6):
+                with self.subTest(separator=separator, column_count=column_count):
+                    source = io.StringIO(
+                        separator.join(str(value) for value in range(column_count))
+                        + "\n"
+                        + separator.join(
+                            str(value + 10) for value in range(column_count)
+                        )
+                        + "\n"
+                    )
+
+                    data = read_signal_data(source)
+
+                    self.assertEqual(data.shape, (2, 4))
+                    self.assertEqual(
+                        list(data.columns),
+                        [f"Component {index + 1}" for index in range(4)],
+                    )
+                    self.assertEqual(
+                        data.values.tolist(), [[0, 1, 2, 3], [10, 11, 12, 13]]
+                    )
+                    self.assertIsNone(data.attrs["header_row"])
+                    self.assertEqual(
+                        detect_column_mode(data), ColumnMode.THREE_COMPONENT
+                    )
+
+    def test_preserves_metadata_with_extra_columns(self):
+        source = io.StringIO(
+            "Station_code    CDG\ntime,x,y,z,absolute\n0,1,2,3,4\n0.01,5,6,7,8\n"
+        )
+
+        data = read_signal_data(source)
+
+        self.assertEqual(list(data.columns), ["time", "x", "y", "z"])
+        self.assertEqual(data.values.tolist(), [[0, 1, 2, 3], [0.01, 5, 6, 7]])
+        self.assertEqual(data.attrs["metadata"], {"Station_code": "CDG"})
+        self.assertEqual(data.attrs["header_row"], 2)
+
     def test_rejects_unsupported_column_count(self):
         data = pd.DataFrame(columns=["one", "two", "three"])
 

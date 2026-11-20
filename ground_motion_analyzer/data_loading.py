@@ -54,6 +54,16 @@ def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
     separator = _detect_separator(reference_line)
     metadata = _parse_metadata(lines[:header_index])
 
+    # Detect headers using the full row width, but load only the supported
+    # time + three-component layout when the file includes extra columns.
+    loaded_column_count = min(column_count, 4)
+    if column_count > loaded_column_count:
+        logger.warning(
+            "Ignoring columns {} through {}; loading only the first four columns.",
+            loaded_column_count + 1,
+            column_count,
+        )
+
     engine = "python" if separator == r"\s+" else "c"
     stream.seek(0)
     data = pd.read_csv(
@@ -62,9 +72,12 @@ def _read_signal_stream(stream: IO[str]) -> pd.DataFrame:
         engine=engine,
         skiprows=header_index,
         header=0 if has_header else None,
+        usecols=range(loaded_column_count),
     )
     if not has_header:
-        data.columns = [f"Component {index + 1}" for index in range(column_count)]
+        data.columns = [
+            f"Component {index + 1}" for index in range(loaded_column_count)
+        ]
     data.attrs["metadata"] = metadata
     data.attrs["header_row"] = header_index + 1 if has_header else None
     return data
@@ -137,10 +150,7 @@ def _read_sac_file(source: str | PathLike[str]) -> pd.DataFrame:
 def _find_first_numeric_row(lines: list[str]) -> tuple[int, int]:
     for index, line in enumerate(lines):
         fields = re.split(r"[\s,;]+", line.strip()) if line.strip() else []
-        if len(fields) > 4:
-            fields = fields[:4]
-            logger.warning(f"Ignoring column {fields[4:]}")
-        if len(fields) in {1, 2, 4} and _all_numeric(fields):
+        if (len(fields) in {1, 2} or len(fields) >= 4) and _all_numeric(fields[:4]):
             return index, len(fields)
     raise ValueError("No numeric signal samples were found in the selected file.")
 
