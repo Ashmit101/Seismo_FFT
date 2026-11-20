@@ -110,7 +110,7 @@ class PreparePlotTests(unittest.TestCase):
         figure, spectrum = self.prepare(
             series,
             time_increment=0.125,
-            scale_factor=2.5,
+            sensitivity=0.4,
             demean=False,
             detrend=False,
             data_unit="m/s²",

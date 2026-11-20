@@ -24,7 +24,7 @@ class MainView(tk.Frame):
             self,
             title="Ground Motion Analyzer",
             developer="By Ashmit Rajaure",
-            download_command=self._download_fourier_data,
+            download_command=self.download_fourier_data,
         )
         self.header.grid(
             row=0,
@@ -85,22 +85,41 @@ class MainView(tk.Frame):
         else:
             logger.info("No data file provided")
 
-    def _download_fourier_data(self):
-        fourier_data = self.plot_area.get_fourier_data()
-        if fourier_data is None:
+    def download_fourier_data(self, *_):
+        logger.info("Exporting Fourier data")
+        MainView._export_data(
+            self,
+            self.plot_area.get_fourier_data(),
+            kind="Fourier",
+            filename_suffix="fourier_transform",
+            dialog_title="Save Fourier transformed data",
+        )
+
+    def download_time_series_data(self, *_):
+        logger.info("Exporting time-series data")
+        MainView._export_data(
+            self,
+            self.control_panel.data,
+            kind="Time-series",
+            filename_suffix="time_series",
+            dialog_title="Save time-series data",
+        )
+
+    def _export_data(self, data, *, kind, filename_suffix, dialog_title):
+        if data is None:
             messagebox.showwarning(
-                "No Fourier data",
-                "Load a valid signal file before downloading Fourier data.",
+                f"No {kind.lower()} data",
+                f"Load a valid signal file before exporting {kind.lower()} data.",
                 parent=self,
             )
             return
 
-        data_file = self.control_panel.file_selector.get_file()
-        source_name = getattr(data_file, "name", "signal")
-        initial_name = f"{Path(source_name).stem}_fourier_transform.csv"
+        data_file = self.control_panel.file_selector.get()["file"]
+        source_name = getattr(data_file, "name", None) or str(data_file or "signal")
+        initial_name = f"{Path(source_name).stem}_{filename_suffix}.csv"
         output_path = filedialog.asksaveasfilename(
             parent=self,
-            title="Save Fourier transformed data",
+            title=dialog_title,
             initialfile=initial_name,
             defaultextension=".csv",
             filetypes=[
@@ -116,18 +135,18 @@ class MainView(tk.Frame):
             "\t" if Path(output_path).suffix.lower() in {".tsv", ".txt"} else ","
         )
         try:
-            fourier_data.to_csv(output_path, index=False, sep=separator)
+            data.to_csv(output_path, index=False, sep=separator)
         except (OSError, PermissionError) as error:
-            logger.exception("Could not save Fourier data")
+            logger.exception("Could not save {} data", kind)
             messagebox.showerror(
                 "Save failed",
-                f"Could not save the Fourier data:\n{error}",
+                f"Could not save the {kind.lower()} data:\n{error}",
                 parent=self,
             )
             return
 
         messagebox.showinfo(
-            "Fourier data saved",
+            f"{kind} data saved",
             f"Saved to:\n{output_path}",
             parent=self,
         )
@@ -283,6 +302,9 @@ class ControlPanel(tk.Frame):
         else:
             self.single_col_options.grid_remove()
             self.double_col_params.grid()
+
+    def load_new_file(self):
+        self.file_selector.load_file()
 
     def get(self):
         control_variables = {

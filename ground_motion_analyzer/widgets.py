@@ -287,7 +287,7 @@ class FileSelector(tk.LabelFrame):
         tk.Button(
             self,
             text="Select File",
-            command=self._load_file,
+            command=self.load_file,
         ).grid(row=0, column=0, sticky=tk.W)
         ttk.Label(
             self,
@@ -296,7 +296,7 @@ class FileSelector(tk.LabelFrame):
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
-    def _load_file(self):
+    def load_file(self):
         if not self.winfo_viewable():
             self.winfo_toplevel().after(100, self._open_dialog)
             return
