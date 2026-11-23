@@ -417,6 +417,7 @@ class PlotArea(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self._fourier_data = None
+        self._time_series_data = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -435,7 +436,7 @@ class PlotArea(tk.Frame):
             NavigationToolbar2Tk,
         )
 
-        figure, fourier_data = result
+        figure, fourier_data, time_series_data = result
         if self.canvas is None:
             self.canvas = FigureCanvasTkAgg(figure, master=self)
             self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
@@ -460,6 +461,7 @@ class PlotArea(tk.Frame):
         self.toolbar.config(bg=Palette.PANEL)
         self.toolbar.update()
         self._fourier_data = fourier_data
+        self._time_series_data = time_series_data
         self.canvas.draw_idle()
         self.loading.grid_remove()
         if self._on_ready is not None:
@@ -467,6 +469,7 @@ class PlotArea(tk.Frame):
 
     def _plot_failed(self, error):
         self._fourier_data = None
+        self._time_series_data = None
         self.loading.grid_remove()
         messagebox.showerror("Plot failed", str(error), parent=self)
 
@@ -474,12 +477,14 @@ class PlotArea(tk.Frame):
         """Drop old plot work."""
         self._task.invalidate()
         self._fourier_data = None
+        self._time_series_data = None
         self._on_ready = None
         self.loading.grid_remove()
 
     def plot(self, motion_data, *, on_ready=None, **kwargs):
         """Queue a plot."""
         self._fourier_data = None
+        self._time_series_data = None
         self._on_ready = on_ready
         self.loading.configure(text="Loading...")
         self.loading.grid()
@@ -628,7 +633,10 @@ class PlotArea(tk.Frame):
                 time_axis.set_xlabel("")
                 fourier_axis.set_xlabel("")
 
-        return figure, fourier_data
+        # Export the full processed samples, not the reduced display envelope.
+        time_series_data = pd.DataFrame(values, columns=component_data.columns)
+        time_series_data.insert(0, "Time (s)", time_values, allow_duplicates=True)
+        return figure, fourier_data, time_series_data
 
     @staticmethod
     def _display_data(x, y, max_points=4998):
@@ -668,6 +676,12 @@ class PlotArea(tk.Frame):
         if self._fourier_data is None:
             return None
         return self._fourier_data.copy()
+
+    def get_time_series_data(self):
+        """Return a copy of the full processed time series currently displayed."""
+        if self._time_series_data is None:
+            return None
+        return self._time_series_data.copy()
 
     @staticmethod
     def _style_axis(axis: Axes, title: str, xlabel: str, ylabel: str):

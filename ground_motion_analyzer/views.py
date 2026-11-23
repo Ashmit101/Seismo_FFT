@@ -99,7 +99,7 @@ class MainView(tk.Frame):
         logger.info("Exporting time-series data")
         MainView._export_data(
             self,
-            self.control_panel.data,
+            self.plot_area.get_time_series_data(),
             kind="Time-series",
             filename_suffix="time_series",
             dialog_title="Save time-series data",
