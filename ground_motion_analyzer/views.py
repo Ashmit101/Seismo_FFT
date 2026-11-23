@@ -22,7 +22,7 @@ class MainView(tk.Frame):
 
         self.header = w.Header(
             self,
-            title="Ground Motion Analyzer",
+            title="SEISNEP",
             developer="By Ashmit Rajaure",
             download_command=self.download_fourier_data,
         )
@@ -162,7 +162,6 @@ class DataTypeDialog(Dialog):
         }
         self.data_type = tk.StringVar(master=parent, value=next(iter(self.data_types)))
         self.unit = tk.StringVar(master=parent, value="unknown")
-        self.sensitivity = tk.DoubleVar(master=parent, value=0.0)
         super().__init__(parent, title=title)
 
     def body(self, frame):
@@ -183,17 +182,6 @@ class DataTypeDialog(Dialog):
             width=12,
         )
         self.unit_combo.grid(row=0, column=1, sticky=tk.W)
-
-        ttk.Label(frame, text="Sensitivity: ").grid(row=1, column=0, sticky=tk.W)
-
-        self.sensitivity_input = ttk.Spinbox(
-            frame,
-            textvariable=self.sensitivity,
-            from_=0.0,
-            to=100.0,
-            width=12,
-        )
-        self.sensitivity_input.grid(row=1, column=1, sticky=tk.W)
         return type_combo
 
     def _on_type_change(self, _event=None):
@@ -202,7 +190,7 @@ class DataTypeDialog(Dialog):
         self.unit.set(units[0])
 
     def apply(self):
-        self.result = (self.unit.get(), self.sensitivity.get())
+        self.result = self.unit.get()
 
 
 class ControlPanel(tk.Frame):
@@ -233,6 +221,24 @@ class ControlPanel(tk.Frame):
         self.single_col_options.bind(
             Events.CONTROL_VALUE_UPDATED, self._emit_values_change
         )
+
+        # Sensitivity applies to every column mode and remains editable after loading.
+        self.sensitivity = tk.DoubleVar(master=self, value=0.0)
+        sensitivity_frame = ttk.LabelFrame(self, text="Sensitivity")
+        sensitivity_frame.grid(row=4, column=0, sticky=(tk.W + tk.E))
+        self.sensitivity_input = ttk.Spinbox(
+            sensitivity_frame,
+            textvariable=self.sensitivity,
+            from_=0.0,
+            to=100.0,
+            width=12,
+        )
+        self.sensitivity_input.grid(row=0, column=0, sticky=tk.W, padx=4, pady=2)
+        ttk.Label(
+            sensitivity_frame,
+            text="Signal is divided by sensitivity.\n0 = no correction",
+        ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=2)
+        self.sensitivity.trace_add("write", self._emit_values_change)
 
         # Double Column Params
         self.double_col_params = w.DoubleColumnParams(self)
@@ -311,6 +317,7 @@ class ControlPanel(tk.Frame):
             "column_format": self.column_format.get(),
             "time_increment": self.single_col_options.get(),
             "filter": self.filtering.get(),
+            "sensitivity": self.sensitivity.get(),
             "data": self.data,
             **self.demean_detrend_options.get(),
             **self.file_selector.get(),

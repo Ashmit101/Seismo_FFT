@@ -1,4 +1,6 @@
-# Seismo FFT
+# SEISNEP
+
+**Seismic Signal Processing and Analaysis, Nepal**
 
 Ground motion viewer and FFT tool.
 
