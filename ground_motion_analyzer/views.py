@@ -223,22 +223,9 @@ class ControlPanel(tk.Frame):
         )
 
         # Sensitivity applies to every column mode and remains editable after loading.
-        self.sensitivity = tk.DoubleVar(master=self, value=0.0)
-        sensitivity_frame = ttk.LabelFrame(self, text="Sensitivity")
-        sensitivity_frame.grid(row=4, column=0, sticky=(tk.W + tk.E))
-        self.sensitivity_input = ttk.Spinbox(
-            sensitivity_frame,
-            textvariable=self.sensitivity,
-            from_=0.0,
-            to=100.0,
-            width=12,
-        )
-        self.sensitivity_input.grid(row=0, column=0, sticky=tk.W, padx=4, pady=2)
-        ttk.Label(
-            sensitivity_frame,
-            text="Signal is divided by sensitivity.\n0 = no correction",
-        ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=2)
-        self.sensitivity.trace_add("write", self._emit_values_change)
+        self.sensitivity = w.SensitivityControl(self)
+        self.sensitivity.grid(row=4, column=0, sticky=tk.W, padx=4, pady=2)
+        self.sensitivity.bind(Events.CONTROL_VALUE_UPDATED, self._emit_values_change)
 
         # Double Column Params
         self.double_col_params = w.DoubleColumnParams(self)

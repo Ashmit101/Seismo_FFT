@@ -692,3 +692,31 @@ class PlotArea(tk.Frame):
         axis.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
         axis.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
         axis.tick_params(axis="both", which="major", labelsize=10)
+
+
+class SensitivityControl(tk.LabelFrame):
+    def __init__(self, parent, *args, delay_ms=100, **kwargs):
+        super().__init__(parent, *args, text="Sensitivity", **kwargs)
+
+        self._after_id = None
+        self.delay_ms = delay_ms
+        self.sensitivity = tk.DoubleVar(value=0.0)
+        self.sensitivity_input = tk.Spinbox(
+            self,
+            from_=0.0,
+            to=100.0,
+            textvariable=self.sensitivity,
+            command=self._on_change,
+        )
+        self.sensitivity_input.grid()
+
+    def get(self):
+        return self.sensitivity.get()
+
+    def _on_change(self):
+        if self._after_id is not None:
+            self.after_cancel(self._after_id)
+        self._after_id = self.after(self.delay_ms, self._event)
+
+    def _event(self):
+        self.event_generate(Events.CONTROL_VALUE_UPDATED)
