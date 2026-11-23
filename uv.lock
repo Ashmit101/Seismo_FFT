@@ -607,79 +607,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ground-motion-analyzer"
-version = "0.1.5"
-source = { editable = "." }
-dependencies = [
-    { name = "contourpy" },
-    { name = "cycler" },
-    { name = "fonttools" },
-    { name = "kiwisolver" },
-    { name = "loguru" },
-    { name = "marimo", extra = ["recommended"] },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "obspy" },
-    { name = "openpyxl" },
-    { name = "packaging" },
-    { name = "pandas" },
-    { name = "pandas-stubs" },
-    { name = "pillow" },
-    { name = "plotly" },
-    { name = "pre-commit" },
-    { name = "pyinstaller" },
-    { name = "pyparsing" },
-    { name = "python-dateutil" },
-    { name = "pytz" },
-    { name = "pyupgrade" },
-    { name = "scipy" },
-    { name = "scipy-stubs" },
-    { name = "six" },
-    { name = "tzdata" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "contourpy", specifier = "==1.3.2" },
-    { name = "cycler", specifier = "==0.12.1" },
-    { name = "fonttools", specifier = "==4.57.0" },
-    { name = "kiwisolver", specifier = "==1.4.8" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "marimo", extras = ["recommended"], specifier = ">=0.13.8" },
-    { name = "matplotlib", specifier = "==3.10.1" },
-    { name = "numpy", specifier = "==2.2.5" },
-    { name = "obspy", specifier = ">=1.4.2" },
-    { name = "openpyxl", specifier = ">=3.1.5" },
-    { name = "packaging", specifier = "==25.0" },
-    { name = "pandas", specifier = "==2.2.3" },
-    { name = "pandas-stubs", specifier = "~=2.2.3" },
-    { name = "pillow", specifier = "==11.2.1" },
-    { name = "plotly", specifier = ">=6.1.1" },
-    { name = "pre-commit", specifier = ">=4.6.0" },
-    { name = "pyinstaller", specifier = ">=6.20.0" },
-    { name = "pyparsing", specifier = "==3.2.3" },
-    { name = "python-dateutil", specifier = "==2.9.0.post0" },
-    { name = "pytz", specifier = "==2025.2" },
-    { name = "pyupgrade", specifier = ">=3.21.2" },
-    { name = "scipy", specifier = "==1.17.1" },
-    { name = "scipy-stubs", specifier = "~=1.17.1" },
-    { name = "six", specifier = "==1.17.0" },
-    { name = "tzdata", specifier = "==2025.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.6.3" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2469,6 +2396,79 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/02/30/7a2e621918d1317ab972f797161131f2635648ad5d92baf0695dd009e4f9/scipy_stubs-1.17.1.5.tar.gz", hash = "sha256:284b1dd1dd46107a614971d170030d310cd88b2ac6b483f85285ee0ff87720bd", size = 399933, upload-time = "2026-05-25T21:34:33.6Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/26/d4bc2ba3427a623f79a6c10c8f427c7a55b56eb8b3eddc369319d97f741b/scipy_stubs-1.17.1.5-py3-none-any.whl", hash = "sha256:58ebf054a86c000c72e8982e121c4ead0d3d9ba7a6c38aa5fa71b07f96a427fd", size = 607388, upload-time = "2026-05-25T21:34:32.073Z" },
+]
+
+[[package]]
+name = "seisnep"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "contourpy" },
+    { name = "cycler" },
+    { name = "fonttools" },
+    { name = "kiwisolver" },
+    { name = "loguru" },
+    { name = "marimo", extra = ["recommended"] },
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "obspy" },
+    { name = "openpyxl" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "pandas-stubs" },
+    { name = "pillow" },
+    { name = "plotly" },
+    { name = "pre-commit" },
+    { name = "pyinstaller" },
+    { name = "pyparsing" },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "pyupgrade" },
+    { name = "scipy" },
+    { name = "scipy-stubs" },
+    { name = "six" },
+    { name = "tzdata" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "jupyter" },
+    { name = "jupyterlab" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "contourpy", specifier = "==1.3.2" },
+    { name = "cycler", specifier = "==0.12.1" },
+    { name = "fonttools", specifier = "==4.57.0" },
+    { name = "kiwisolver", specifier = "==1.4.8" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "marimo", extras = ["recommended"], specifier = ">=0.13.8" },
+    { name = "matplotlib", specifier = "==3.10.1" },
+    { name = "numpy", specifier = "==2.2.5" },
+    { name = "obspy", specifier = ">=1.4.2" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "packaging", specifier = "==25.0" },
+    { name = "pandas", specifier = "==2.2.3" },
+    { name = "pandas-stubs", specifier = "~=2.2.3" },
+    { name = "pillow", specifier = "==11.2.1" },
+    { name = "plotly", specifier = ">=6.1.1" },
+    { name = "pre-commit", specifier = ">=4.6.0" },
+    { name = "pyinstaller", specifier = ">=6.20.0" },
+    { name = "pyparsing", specifier = "==3.2.3" },
+    { name = "python-dateutil", specifier = "==2.9.0.post0" },
+    { name = "pytz", specifier = "==2025.2" },
+    { name = "pyupgrade", specifier = ">=3.21.2" },
+    { name = "scipy", specifier = "==1.17.1" },
+    { name = "scipy-stubs", specifier = "~=1.17.1" },
+    { name = "six", specifier = "==1.17.0" },
+    { name = "tzdata", specifier = "==2025.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "jupyterlab", specifier = ">=4.6.3" },
 ]
 
 [[package]]
