@@ -84,6 +84,7 @@ class ProcessedExportStateTests(unittest.TestCase):
             _on_ready=Mock(),
             loading=Mock(),
             canvas=None,
+            spectrum_scale=Mock(get=Mock(return_value="log")),
         )
 
     def assert_exports_unavailable(self, area):
@@ -131,8 +132,10 @@ class ProcessedExportStateTests(unittest.TestCase):
             patch("matplotlib.backends.backend_tkagg.FigureCanvasTkAgg"),
             patch("matplotlib.backends.backend_tkagg.NavigationToolbar2Tk"),
             patch("ground_motion_analyzer.widgets.tk.Frame"),
+            patch.object(PlotArea, "_set_spectrum_scale") as set_scale,
         ):
             PlotArea._show_plot(area, (figure, spectrum, processed))
+        set_scale.assert_called_once_with(figure, "log")
         area._on_ready.assert_called_once_with()
         exported = PlotArea.get_time_series_data(area)
         exported.iloc[0, 1] = 999.0

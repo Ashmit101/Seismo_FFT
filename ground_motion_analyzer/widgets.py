@@ -419,14 +419,31 @@ class PlotArea(tk.Frame):
         self._fourier_data = None
         self._time_series_data = None
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self.spectrum_scale = tk.StringVar(master=self, value="linear")
+        scale_controls = ttk.Frame(self)
+        scale_controls.grid(row=0, column=0, sticky="w", padx=8, pady=4)
+        ttk.Label(scale_controls, text="Spectrum scale:").pack(side=tk.LEFT)
+        for label, value in (
+            ("Linear", "linear"),
+            ("Log–log", "loglog"),
+            ("Y log / X linear", "log"),
+        ):
+            ttk.Radiobutton(
+                scale_controls,
+                text=label,
+                variable=self.spectrum_scale,
+                value=value,
+                command=self._change_spectrum_scale,
+            ).pack(side=tk.LEFT, padx=6)
 
         self.canvas = None
         self.fig = None
         self.toolbar = None
         self._on_ready = None
         self.loading = ttk.Label(self, text="Load a file to begin")
-        self.loading.grid(row=0, column=0)
+        self.loading.grid(row=1, column=0)
         self._task = BackgroundTask(self, self._show_plot, self._plot_failed)
 
     def _show_plot(self, result):
@@ -437,11 +454,13 @@ class PlotArea(tk.Frame):
         )
 
         figure, fourier_data, time_series_data = result
+        # Read the current choice at delivery, including changes made while loading.
+        PlotArea._set_spectrum_scale(figure, self.spectrum_scale.get())
         if self.canvas is None:
             self.canvas = FigureCanvasTkAgg(figure, master=self)
-            self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+            self.canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew")
             self.toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
-            self.toolbar_frame.grid(row=1, column=0, sticky="sew")
+            self.toolbar_frame.grid(row=2, column=0, sticky="sew")
         else:
             if self.canvas.widgetlock.isowner(self.toolbar):
                 self.canvas.widgetlock.release(self.toolbar)
@@ -466,6 +485,99 @@ class PlotArea(tk.Frame):
         self.loading.grid_remove()
         if self._on_ready is not None:
             self._on_ready()
+
+    def _change_spectrum_scale(self):
+        """Redraw only spectrum axes; keep processing, exports and time zoom intact."""
+        if self.fig is None:
+            return
+        PlotArea._set_spectrum_scale(self.fig, self.spectrum_scale.get())
+        # Old navigation history contains limits from the previous scale.
+        self.toolbar.update()
+        self.toolbar.push_current()
+        self.canvas.draw_idle()
+
+    @staticmethod
+    def _set_spectrum_scale(figure, scale):
+        """Set spectrum axes to linear, log–log, or log magnitude only."""
+        import numpy as np
+
+        if scale not in {"linear", "loglog", "log"}:
+            raise ValueError("Spectrum scale must be 'linear', 'loglog', or 'log'.")
+        spectrum_axes = figure.axes[1::2]
+        # Shared x axes change together; capture the previous mode before the loop.
+        reset_linear_x = any(axis.get_xscale() != "linear" for axis in spectrum_axes)
+        if scale == "loglog":
+            # Reduced display points may differ by component. Use their union so
+            # a shared frequency axis does not clip another component's spectrum.
+            frequencies = (
+                np.concatenate([axis.lines[0].get_xdata() for axis in spectrum_axes])
+                if spectrum_axes
+                else np.array([])
+            )
+            x = frequencies[np.isfinite(frequencies) & (frequencies > 0)]
+            if x.size:
+                low, high = float(x.min()), float(x.max())
+                log_xlim = (low, high) if low < high else (low / 10, high * 10)
+            else:
+                log_xlim = (0.1, 1.0)
+
+        for axis in spectrum_axes:
+            if scale == "loglog":
+                axis.set_xlim(*log_xlim)
+                axis.set_xscale("log", nonpositive="mask")
+            else:
+                axis.set_xscale("linear")
+                if reset_linear_x:
+                    # Include DC again on return from a logarithmic frequency axis.
+                    axis.autoscale(enable=True, axis="x")
+            # The zero-baseline fill cannot be shown on a logarithmic y-axis.
+            for collection in axis.collections:
+                collection.set_visible(scale == "linear")
+            # Masked zero bins break lines; mark isolated positive bins (e.g. DC).
+            axis.lines[0].set_marker("None" if scale == "linear" else ".")
+            axis.lines[0].set_markersize(3)
+            notice = next(
+                (text for text in axis.texts if text.get_gid() == "empty-log-spectrum"),
+                None,
+            )
+            if notice is None:
+                notice = axis.text(
+                    0.5,
+                    0.5,
+                    "No positive spectrum values",
+                    transform=axis.transAxes,
+                    ha="center",
+                    va="center",
+                    color=Palette.SUBTEXT,
+                    visible=False,
+                    gid="empty-log-spectrum",
+                )
+            notice.set_visible(False)
+
+            if scale == "linear":
+                axis.set_yscale("linear")
+                axis.autoscale(enable=True, axis="y")
+                continue
+
+            frequencies, magnitudes = (
+                np.asarray(values) for values in axis.lines[0].get_data()
+            )
+            valid = (
+                np.isfinite(frequencies) & np.isfinite(magnitudes) & (magnitudes > 0)
+            )
+            if scale == "loglog":
+                valid &= frequencies > 0
+            y = magnitudes[valid]
+            # Include DC only on linear x. Set positive bounds before changing
+            # y scale, even if no samples can be displayed in the chosen mode.
+            if y.size:
+                low, high = float(y.min()), float(y.max())
+                axis.set_ylim(low / 1.1, high * 1.1)
+            else:
+                axis.set_ylim(0.1, 1.0)
+                notice.set_visible(True)
+            # Mask nonpositive values only on display; do not invent a data floor.
+            axis.set_yscale("log", nonpositive="mask")
 
     def _plot_failed(self, error):
         self._fourier_data = None

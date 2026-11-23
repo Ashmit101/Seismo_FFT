@@ -34,6 +34,21 @@ and filtering applied according to the selected settings. Exports include a
 `Time (s)` column and all signal samples, not just the reduced display points.
 Wait for the updated plot to finish before exporting after a settings change.
 
+Use **Spectrum scale** above the plots to choose:
+
+| Option | Frequency (x) axis | Magnitude (y) axis |
+| --- | --- | --- |
+| Linear | Linear | Linear |
+| Log–log | Logarithmic | Logarithmic |
+| Y log / X linear | Linear | Logarithmic |
+
+Time histories and their zoom stay unchanged. Switching modes reuses the
+existing FFT without changing processing or exported values. Both logarithmic
+magnitude modes mask nonpositive magnitudes and hide zero-baseline shading;
+Log–log also omits zero frequency. If no samples can be displayed, the spectrum
+shows an explanatory message. Returning from Log–log restores the linear
+frequency extent, including zero. The selected mode also applies to new plots.
+
 ## Build executable
 
 ```bash
