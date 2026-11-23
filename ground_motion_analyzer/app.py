@@ -27,7 +27,7 @@ class Application(tk.Tk):
         self._bind_events()
 
     def _configure_window(self):
-        self.title("Ground Motion Analyzer")
+        self.title("SEISNEP")
         self.geometry("1280x800")
 
         menu = MainMenu(self)

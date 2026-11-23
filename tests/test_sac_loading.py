@@ -105,7 +105,7 @@ class SacLoadingTests(unittest.TestCase):
         sac.write(str(path), byteorder="big")
         data, mode = ControlPanel._read_file(str(path))
         self.assertEqual(mode, ColumnMode.DOUBLE)
-        figure, spectrum = PlotArea._prepare_plot(
+        figure, spectrum, time_series = PlotArea._prepare_plot(
             data["amplitude"],
             time_data=data["time"],
             demean=False,
@@ -114,6 +114,8 @@ class SacLoadingTests(unittest.TestCase):
         self.addCleanup(figure.clear)
         self.assertEqual(len(figure.axes), 2)
         np.testing.assert_allclose(figure.axes[0].lines[0].get_xdata(), data["time"])
+        np.testing.assert_allclose(time_series["Time (s)"], data["time"])
+        np.testing.assert_allclose(time_series["amplitude"], data["amplitude"])
         np.testing.assert_allclose(
             spectrum.iloc[:, 0],
             np.fft.rfftfreq(len(self.values), sac.delta),

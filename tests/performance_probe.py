@@ -34,7 +34,7 @@ def main():
     profile.enable()
     started = time.perf_counter()
     if hasattr(PlotArea, "_prepare_plot"):
-        figure, fourier_data = PlotArea._prepare_plot(signal)
+        figure, fourier_data, _ = PlotArea._prepare_plot(signal)
     else:
         # Compatibility with the original synchronous implementation.
         figure = Figure(figsize=(8, 6), dpi=100)

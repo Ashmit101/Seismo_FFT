@@ -32,7 +32,7 @@ class FileDialogTests(unittest.TestCase):
                 patch("ground_motion_analyzer.views.DataTypeDialog") as units,
             ):
                 units.return_value.result = "m/s²"
-                self.selector._load_file()
+                self.selector.load_file()
                 options = dialog.call_args.kwargs
                 self.assertTrue(Path(options["initialdir"]).is_dir())
                 self.assertIs(options["parent"], self.selector)
@@ -42,7 +42,9 @@ class FileDialogTests(unittest.TestCase):
                 self.assertIn(
                     ("SAC", "*.sac *.SAC *.sacxy *.SACXY"), options["filetypes"]
                 )
-                self.assertEqual(self.selector.data_file, selected)
+                self.assertEqual(
+                    self.selector.get(), {"file": selected, "data_unit": "m/s²"}
+                )
                 self.selector.event_generate.assert_called_once()
                 self.assertEqual(FileSelector._initial_directory(), Path(directory))
 
@@ -57,7 +59,7 @@ class FileDialogTests(unittest.TestCase):
                 patch("ground_motion_analyzer.views.DataTypeDialog") as units,
             ):
                 units.return_value.result = None
-                self.selector._load_file()
+                self.selector.load_file()
                 self.assertEqual(self.selector.data_file, "previous.csv")
                 self.assertEqual(self.selector.data_unit, "g")
                 self.selector.event_generate.assert_not_called()
@@ -69,7 +71,7 @@ class FileDialogTests(unittest.TestCase):
         with patch(
             "ground_motion_analyzer.widgets.filedialog.askopenfilename"
         ) as dialog:
-            self.selector._load_file()
+            self.selector.load_file()
             root.after.assert_called_once_with(100, self.selector._open_dialog)
             dialog.assert_not_called()
             self.selector.winfo_exists.return_value = False
