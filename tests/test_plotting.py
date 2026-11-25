@@ -340,6 +340,51 @@ class PreparePlotTests(unittest.TestCase):
         np.testing.assert_array_equal(frame, values)
         np.testing.assert_array_equal(time, original_time)
 
+    def test_jittered_uniform_timestamps_are_accepted(self):
+        # Sensor CSVs (e.g. scientific-notation exports) often have slight
+        # sampling-interval jitter around a constant rate without real gaps.
+        steps = np.array(
+            [0.008008, 0.007990, 0.008015, 0.007996, 0.008004, 0.008002] * 4
+        )
+        time = np.concatenate([[0.020893245], 0.020893245 + np.cumsum(steps)])
+        names = ["x", "y", "z"]
+        values = np.column_stack(
+            [np.sin(2 * np.pi * (index + 1) * time) for index in range(3)]
+        )
+        frame = pd.DataFrame(values, columns=names)
+
+        figure, spectrum, time_series = self.prepare(
+            frame,
+            time_data=pd.Series(time, name="Time (s)"),
+            demean=False,
+        )
+
+        dt = float(np.median(steps))
+        self.assertEqual(len(figure.axes), 6)
+        self.assert_time_series(time_series, time, values, names)
+        self.assert_full_fft(spectrum, values, dt, names)
+
+    def test_scientific_notation_sample_csv_plots_successfully(self):
+        from pathlib import Path
+
+        from ground_motion_analyzer.data_loading import read_signal_data
+
+        sample_path = (
+            Path(__file__).resolve().parents[1]
+            / "notebooks"
+            / "samples"
+            / "scientific_notation.csv"
+        )
+        data = read_signal_data(sample_path)
+        figure, spectrum, time_series = self.prepare(
+            data.iloc[:, 1:4],
+            time_data=data.iloc[:, 0],
+        )
+
+        self.assertEqual(len(figure.axes), 6)
+        self.assertEqual(len(time_series), len(data))
+        self.assertEqual(len(spectrum), len(data) // 2 + 1)
+
     def test_time_series_accessor_returns_none_when_no_result_is_cached(self):
         holder = SimpleNamespace(_time_series_data=None)
         self.assertIsNone(PlotArea.get_time_series_data(holder))

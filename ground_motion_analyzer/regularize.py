@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def regularize_time_series(time_values, component_data, gap_factor=5.0, rtol=1e-3):
+def regularize_time_series(time_values, component_data, gap_factor=5.0, rtol=2e-2):
     """
     Return (time_values, component_data, time_increment) on a uniform time grid.
 
