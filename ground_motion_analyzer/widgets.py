@@ -9,6 +9,7 @@ from loguru import logger
 
 from .background import BackgroundTask
 from .constants import ColumnMode, Events, Palette
+from .regularize import regularize_time_series
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -114,32 +115,6 @@ class SingleColumnParams(tk.LabelFrame):
 
     def set(self, time_increment: float):
         self.dt_var.set(time_increment)
-
-
-class ScalingFactor(tk.LabelFrame):
-    """Scaling factor for the data"""
-
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, text="Scaling Factor", **kwargs)
-        self.scaling_factor = tk.DoubleVar(value=1.0)
-
-        tk.Label(self, text="Scaling factor: ").grid(row=0, column=0)
-        ttk.Spinbox(
-            self,
-            from_=0.1,
-            to=100.0,
-            increment=0.01,
-            textvariable=self.scaling_factor,
-        ).grid(row=0, column=1)
-
-        self.scaling_factor.trace_add("write", self._on_data_change)
-
-    def get(self):
-        return self.scaling_factor.get()
-
-    def _on_data_change(self, *_):
-        logger.info("Scaling factor updated")
-        self.event_generate(Events.CONTROL_VALUE_UPDATED, when="tail")
 
 
 class DoubleColumnParams(tk.LabelFrame):
@@ -292,7 +267,6 @@ class Filtering(tk.LabelFrame):
 class FileSelector(tk.LabelFrame):
     """Button to open dialog that selects file"""
 
-    # Retain the directory across selectors for the current application session.
     _last_directory: ClassVar[Path | None] = None
 
     @classmethod
@@ -308,10 +282,11 @@ class FileSelector(tk.LabelFrame):
         self.data_file = None
         self.data_unit = ""
         self.selected_file_name = tk.StringVar(value="No file selected")
+
         tk.Button(
             self,
             text="Select File",
-            command=self._load_file,
+            command=self.load_file,
         ).grid(row=0, column=0, sticky=tk.W)
         ttk.Label(
             self,
@@ -320,8 +295,7 @@ class FileSelector(tk.LabelFrame):
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky=tk.W, padx=4, pady=(4, 0))
 
-    def _load_file(self):
-        # No dialog opens at startup. If called before mapping, let Tk paint first.
+    def load_file(self):
         if not self.winfo_viewable():
             self.winfo_toplevel().after(100, self._open_dialog)
             return
@@ -335,10 +309,14 @@ class FileSelector(tk.LabelFrame):
             title="Select signal data file",
             initialdir=str(self._initial_directory()),
             filetypes=[
-                ("Signal data", "*.csv *.txt *.tsv *.mseed"),
+                (
+                    "Signal data",
+                    "*.csv *.txt *.tsv *.mseed *.MSEED *.sac *.SAC *.sacxy *.SACXY",
+                ),
                 ("CSV", "*.csv"),
                 ("Text", "*.txt"),
-                ("MSEED", "*.mseed"),
+                ("MSEED", "*.mseed *.MSEED"),
+                ("SAC", "*.sac *.SAC *.sacxy *.SACXY"),
                 ("All files", "*.*"),
             ],
         )
@@ -347,20 +325,21 @@ class FileSelector(tk.LabelFrame):
             type(self)._last_directory = Path(signal_filepath).parent
             from ground_motion_analyzer.views import DataTypeDialog
 
-            data_type_dialog = DataTypeDialog(self, title="Data type")
+            data_type_dialog = DataTypeDialog(self, title="Data units")
             data_unit = data_type_dialog.result
             if data_unit is None:
-                return  # Cancelling the unit dialog must not replace the loaded file.
+                return
             self.data_file = signal_filepath
             self.data_unit = data_unit
+
             self.selected_file_name.set(Path(signal_filepath).name)
             self.event_generate(Events.FILE_SELECTED)
 
-    def get_file(self):
-        return self.data_file
-
-    def get_unit(self):
-        return self.data_unit
+    def get(self):
+        return {
+            "file": self.data_file,
+            "data_unit": self.data_unit,
+        }
 
 
 class Statistics(tk.LabelFrame):
@@ -438,34 +417,51 @@ class PlotArea(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self._fourier_data = None
+        self._time_series_data = None
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self.spectrum_scale = tk.StringVar(master=self, value="linear")
+        scale_controls = ttk.Frame(self)
+        scale_controls.grid(row=0, column=0, sticky="w", padx=8, pady=4)
+        ttk.Label(scale_controls, text="Spectrum scale:").pack(side=tk.LEFT)
+        for label, value in (
+            ("Linear", "linear"),
+            ("Log–log", "loglog"),
+            ("Y log / X linear", "log"),
+        ):
+            ttk.Radiobutton(
+                scale_controls,
+                text=label,
+                variable=self.spectrum_scale,
+                value=value,
+                command=self._change_spectrum_scale,
+            ).pack(side=tk.LEFT, padx=6)
 
         self.canvas = None
         self.fig = None
         self.toolbar = None
         self._on_ready = None
         self.loading = ttk.Label(self, text="Load a file to begin")
-        self.loading.grid(row=0, column=0)
+        self.loading.grid(row=1, column=0)
         self._task = BackgroundTask(self, self._show_plot, self._plot_failed)
 
     def _show_plot(self, result):
-        """Attach the completed, previously detached figure on the Tk thread."""
-        # The Tk backend is only imported when there is a first plot to display.
+        """Show a finished plot."""
         from matplotlib.backends.backend_tkagg import (
             FigureCanvasTkAgg,
             NavigationToolbar2Tk,
         )
 
-        figure, fourier_data = result
+        figure, fourier_data, time_series_data = result
+        # Read the current choice at delivery, including changes made while loading.
+        PlotArea._set_spectrum_scale(figure, self.spectrum_scale.get())
         if self.canvas is None:
             self.canvas = FigureCanvasTkAgg(figure, master=self)
-            self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+            self.canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew")
             self.toolbar_frame = tk.Frame(self, bg=Palette.PANEL)
-            self.toolbar_frame.grid(row=1, column=0, sticky="sew")
+            self.toolbar_frame.grid(row=2, column=0, sticky="sew")
         else:
-            # Reuse the Tk canvas; no worker ever edits its live figure.
-            # Recreate the toolbar so pan/zoom callbacks bind to the new figure.
             if self.canvas.widgetlock.isowner(self.toolbar):
                 self.canvas.widgetlock.release(self.toolbar)
             self.toolbar.destroy()
@@ -484,26 +480,123 @@ class PlotArea(tk.Frame):
         self.toolbar.config(bg=Palette.PANEL)
         self.toolbar.update()
         self._fourier_data = fourier_data
+        self._time_series_data = time_series_data
         self.canvas.draw_idle()
         self.loading.grid_remove()
         if self._on_ready is not None:
             self._on_ready()
 
+    def _change_spectrum_scale(self):
+        """Redraw only spectrum axes; keep processing, exports and time zoom intact."""
+        if self.fig is None:
+            return
+        PlotArea._set_spectrum_scale(self.fig, self.spectrum_scale.get())
+        # Old navigation history contains limits from the previous scale.
+        self.toolbar.update()
+        self.toolbar.push_current()
+        self.canvas.draw_idle()
+
+    @staticmethod
+    def _set_spectrum_scale(figure, scale):
+        """Set spectrum axes to linear, log–log, or log magnitude only."""
+        import numpy as np
+
+        if scale not in {"linear", "loglog", "log"}:
+            raise ValueError("Spectrum scale must be 'linear', 'loglog', or 'log'.")
+        spectrum_axes = figure.axes[1::2]
+        # Shared x axes change together; capture the previous mode before the loop.
+        reset_linear_x = any(axis.get_xscale() != "linear" for axis in spectrum_axes)
+        if scale == "loglog":
+            # Reduced display points may differ by component. Use their union so
+            # a shared frequency axis does not clip another component's spectrum.
+            frequencies = (
+                np.concatenate([axis.lines[0].get_xdata() for axis in spectrum_axes])
+                if spectrum_axes
+                else np.array([])
+            )
+            x = frequencies[np.isfinite(frequencies) & (frequencies > 0)]
+            if x.size:
+                low, high = float(x.min()), float(x.max())
+                log_xlim = (low, high) if low < high else (low / 10, high * 10)
+            else:
+                log_xlim = (0.1, 1.0)
+
+        for axis in spectrum_axes:
+            if scale == "loglog":
+                axis.set_xlim(*log_xlim)
+                axis.set_xscale("log", nonpositive="mask")
+            else:
+                axis.set_xscale("linear")
+                if reset_linear_x:
+                    # Include DC again on return from a logarithmic frequency axis.
+                    axis.autoscale(enable=True, axis="x")
+            # The zero-baseline fill cannot be shown on a logarithmic y-axis.
+            for collection in axis.collections:
+                collection.set_visible(scale == "linear")
+            # Masked zero bins break lines; mark isolated positive bins (e.g. DC).
+            axis.lines[0].set_marker("None" if scale == "linear" else ".")
+            axis.lines[0].set_markersize(3)
+            notice = next(
+                (text for text in axis.texts if text.get_gid() == "empty-log-spectrum"),
+                None,
+            )
+            if notice is None:
+                notice = axis.text(
+                    0.5,
+                    0.5,
+                    "No positive spectrum values",
+                    transform=axis.transAxes,
+                    ha="center",
+                    va="center",
+                    color=Palette.SUBTEXT,
+                    visible=False,
+                    gid="empty-log-spectrum",
+                )
+            notice.set_visible(False)
+
+            if scale == "linear":
+                axis.set_yscale("linear")
+                axis.autoscale(enable=True, axis="y")
+                continue
+
+            frequencies, magnitudes = (
+                np.asarray(values) for values in axis.lines[0].get_data()
+            )
+            valid = (
+                np.isfinite(frequencies) & np.isfinite(magnitudes) & (magnitudes > 0)
+            )
+            if scale == "loglog":
+                valid &= frequencies > 0
+            y = magnitudes[valid]
+            # Include DC only on linear x. Set positive bounds before changing
+            # y scale, even if no samples can be displayed in the chosen mode.
+            if y.size:
+                low, high = float(y.min()), float(y.max())
+                axis.set_ylim(low / 1.1, high * 1.1)
+            else:
+                axis.set_ylim(0.1, 1.0)
+                notice.set_visible(True)
+            # Mask nonpositive values only on display; do not invent a data floor.
+            axis.set_yscale("log", nonpositive="mask")
+
     def _plot_failed(self, error):
         self._fourier_data = None
+        self._time_series_data = None
         self.loading.grid_remove()
         messagebox.showerror("Plot failed", str(error), parent=self)
 
     def cancel_pending(self):
-        """Do not display/export an old plot while a replacement file loads."""
+        """Drop old plot work."""
         self._task.invalidate()
         self._fourier_data = None
+        self._time_series_data = None
         self._on_ready = None
         self.loading.grid_remove()
 
     def plot(self, motion_data, *, on_ready=None, **kwargs):
-        """Queue analysis; only this small entry point runs in the Tk handler."""
+        """Queue a plot."""
         self._fourier_data = None
+        self._time_series_data = None
         self._on_ready = on_ready
         self.loading.configure(text="Loading...")
         self.loading.grid()
@@ -517,14 +610,12 @@ class PlotArea(tk.Frame):
         time_data=None,
         time_increment=0.01,
         filter_params=None,
-        scale_factor=1.0,
         data_unit="",
         demean=True,
         detrend=False,
+        sensitivity=0.0,
     ):
-        """Build a detached figure and spectrum without accessing Tk/canvases."""
-        # Heavy imports happen on first analysis, in the worker, not at startup.
-        # Avoid pyplot and global style/backend mutations in background threads.
+        """Build the plot and FFT."""
         import numpy as np
         import pandas as pd
         from matplotlib.figure import Figure
@@ -555,17 +646,18 @@ class PlotArea(tk.Frame):
             component_data = component_data.loc[valid]
             time_values = time_values.loc[valid].to_numpy(dtype=float)
 
-            time_steps = np.diff(time_values)
-            if len(time_steps) == 0 or np.any(time_steps <= 0):
-                raise ValueError("Time values must be strictly increasing.")
-            time_increment = float(np.median(time_steps))
-            if not np.allclose(time_steps, time_increment, rtol=1e-3, atol=1e-12):
-                raise ValueError("Filtering and FFT require uniformly sampled data.")
+            time_values, component_data, time_increment = regularize_time_series(
+                time_values, component_data
+            )
 
         if time_increment <= 0:
             raise ValueError("Time increment must be greater than zero.")
 
-        values = component_data.to_numpy(dtype=float) * scale_factor
+        values = component_data.to_numpy(dtype=float)
+
+        if sensitivity != 0.0:
+            values = component_data.to_numpy(dtype=float) / sensitivity
+
         if len(values) < 2:
             raise ValueError("At least two valid signal samples are required.")
 
@@ -589,7 +681,6 @@ class PlotArea(tk.Frame):
             raise ValueError("Plotting supports either one or three components.")
 
         figure = Figure(figsize=(8, 6), dpi=100, facecolor=Palette.BG)
-        # Fixed layout avoids tight_layout's renderer/canvas work in the worker.
         figure.subplots_adjust(
             left=0.10, right=0.96, bottom=0.10, top=0.93, hspace=0.60, wspace=0.35
         )
@@ -654,16 +745,14 @@ class PlotArea(tk.Frame):
                 time_axis.set_xlabel("")
                 fourier_axis.set_xlabel("")
 
-        return figure, fourier_data
+        # Export the full processed samples, not the reduced display envelope.
+        time_series_data = pd.DataFrame(values, columns=component_data.columns)
+        time_series_data.insert(0, "Time (s)", time_values, allow_duplicates=True)
+        return figure, fourier_data, time_series_data
 
     @staticmethod
     def _display_data(x, y, max_points=4998):
-        """Bound fill polygons to <10k vertices, preserving per-bin extrema.
-
-        Only display data is reduced: FFT/export retain all samples and bins.
-        Min/max pairs preserve narrow peaks that a plain stride could miss.
-        Zooming shows this envelope, not every original sample.
-        """
+        """Reduce points for display while keeping peaks."""
         import numpy as np
 
         if len(y) <= max_points:
@@ -680,7 +769,6 @@ class PlotArea(tk.Frame):
                 [len(y) - 1],
             )
         )
-        # Include the partial last bin's extrema as well without exceeding cap.
         if full_bins * bin_size < len(y):
             remainder = y[full_bins * bin_size :]
             indices = np.concatenate(
@@ -700,6 +788,12 @@ class PlotArea(tk.Frame):
         if self._fourier_data is None:
             return None
         return self._fourier_data.copy()
+
+    def get_time_series_data(self):
+        """Return a copy of the full processed time series currently displayed."""
+        if self._time_series_data is None:
+            return None
+        return self._time_series_data.copy()
 
     @staticmethod
     def _style_axis(axis: Axes, title: str, xlabel: str, ylabel: str):
@@ -724,3 +818,31 @@ class PlotArea(tk.Frame):
         axis.set_xlabel(xlabel, color=Palette.SUBTEXT, fontsize=8)
         axis.set_ylabel(ylabel, color=Palette.SUBTEXT, fontsize=8)
         axis.tick_params(axis="both", which="major", labelsize=10)
+
+
+class SensitivityControl(tk.LabelFrame):
+    def __init__(self, parent, *args, delay_ms=100, **kwargs):
+        super().__init__(parent, *args, text="Sensitivity", **kwargs)
+
+        self._after_id = None
+        self.delay_ms = delay_ms
+        self.sensitivity = tk.DoubleVar(value=0.0)
+        self.sensitivity_input = tk.Spinbox(
+            self,
+            from_=0.0,
+            to=100.0,
+            textvariable=self.sensitivity,
+            command=self._on_change,
+        )
+        self.sensitivity_input.grid()
+
+    def get(self):
+        return self.sensitivity.get()
+
+    def _on_change(self):
+        if self._after_id is not None:
+            self.after_cancel(self._after_id)
+        self._after_id = self.after(self.delay_ms, self._event)
+
+    def _event(self):
+        self.event_generate(Events.CONTROL_VALUE_UPDATED)

@@ -24,6 +24,9 @@ class Events(StrEnum):
     VARIABLES_UPDATED = "<<VariablesUpdated>>"
     CONTROL_VALUE_UPDATED = "<<ControlValueUpdated>>"
     FILTER_PARAMS_UPDATED = "<<FilterParamsUpdated>>"
+    EXPORT_FFT_DATA = "<<ExportFFTData>>"
+    EXPORT_TIME_SERIES_DATA = "<<ExportTimeSeriesData>>"
+    LOAD_NEW_FILE = "<<LoadNewFile>>"
 
 
 class ColumnMode(StrEnum):
